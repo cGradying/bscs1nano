@@ -1,0 +1,30 @@
+{
+  "section": { "name": "BSCS 1-1N", "program": "BS Computer Science" },
+  "dayStart": 6,
+  "dayEnd": 21,
+  "classes": {
+    "Mon": [
+      { "id": "geed005", "start": 15, "end": 18, "code": "GEED 005", "title": "Purposive Communication", "room": "" },
+      { "id": "geed032", "start": 18, "end": 21, "code": "GEED 032", "title": "Filipinolohiya at Pambansang Kaunlaran", "room": "" }
+    ],
+    "Tue": [
+      { "id": "comp001lec", "start": 14, "end": 16, "code": "COMP 001", "title": "Introduction to Computing", "room": "" },
+      { "id": "geed020", "start": 18, "end": 21, "code": "GEED 020", "title": "Politics, Governance and Citizenship", "room": "" }
+    ],
+    "Wed": [],
+    "Thu": [],
+    "Fri": [
+      { "id": "comp001lab", "start": 13.5, "end": 16.5, "code": "COMP 001", "title": "Introduction to Computing", "room": "" },
+      { "id": "pathfit1", "start": 17, "end": 19, "code": "PATHFIT 1", "title": "Physical Activity Towards Health and Fitness 1", "room": "" }
+    ],
+    "Sat": [
+      { "id": "geed004", "start": 7.5, "end": 10.5, "code": "GEED 004", "title": "Mathematics in the Modern World", "room": "" },
+      { "id": "comp002a", "start": 13.5, "end": 16.5, "code": "COMP 002", "title": "Computer Programming 1", "room": "" },
+      { "id": "comp002b", "start": 16.5, "end": 18.5, "code": "COMP 002", "title": "Computer Programming 1", "room": "" }
+    ],
+    "Sun": [
+      { "id": "cwts001a", "start": 8, "end": 12, "code": "CWTS 001", "title": "Civic Welfare Training Service 1", "room": "" },
+      { "id": "cwts001b", "start": 13, "end": 18, "code": "CWTS 001", "title": "Civic Welfare Training Service 1", "room": "" }
+    ]
+  }
+}

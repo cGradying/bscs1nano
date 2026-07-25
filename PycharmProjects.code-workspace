@@ -1,0 +1,26 @@
+{
+	"folders": [
+		{
+			"path": "../../../PycharmProjects"
+		},
+		{
+			"path": "../../algorithmic-botany-master/algorithmic-botany-master"
+		},
+		{
+			"path": "../../qrcp_0.11.6_windows_amd64"
+		}
+	],
+	"settings": {
+		"liveServer.settings.multiRootWorkspaceName": "PycharmProjects",
+		"chat.tools.terminal.autoApprove": {
+			"/^python -m py_compile screen_clicker\\.py$/": {
+				"approve": true,
+				"matchCommandLine": true
+			}
+		}
+	},
+	"launch": {
+		"version": "0.2.0",
+		"configurations": []
+	}
+}
