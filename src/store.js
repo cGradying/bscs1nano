@@ -110,3 +110,17 @@ export function removeClass(day, classId) {
   saveSchedule(schedule);
   return true;
 }
+
+// --- admin-configurable settings (daily post time) ---
+const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
+const DEFAULT_SETTINGS = { postHour: 1, postMinute: 0 };
+
+export function getSettings() {
+  return { ...DEFAULT_SETTINGS, ...readJson(SETTINGS_FILE, DEFAULT_SETTINGS) };
+}
+
+export function saveSettings(settings) {
+  const merged = { ...getSettings(), ...settings };
+  writeJson(SETTINGS_FILE, merged);
+  return merged;
+}

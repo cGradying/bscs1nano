@@ -92,7 +92,14 @@ images. It's stateless — clicking just re-renders on the spot — so it
 keeps working correctly no matter how long the message has been sitting
 there, and it doesn't re-ping anyone (only actual schedule updates do).
 
-## 7. Deploy somewhere it stays online 24/7
+## 7. Changing the daily post time
+
+`POST_HOUR`/`POST_MINUTE` in `.env` only set the *starting* time. You can
+change it anytime afterward right from the admin panel — there's a
+"Daily auto-post time" field at the top of the dashboard. Save it and the
+schedule updates immediately, no redeploy or restart needed.
+
+## 8. Deploy somewhere it stays online 24/7
 
 A Discord bot needs a process that's *always running* — it holds a
 constant connection to Discord, and the 1am cron only fires if something
@@ -174,8 +181,17 @@ it never goes idle long enough to sleep.
 2. Build command: `npm install`. Start command: `npm start`.
 3. Add your environment variables (`DISCORD_TOKEN`, `CHANNEL_ID`,
    `ADMIN_PASSWORD`, `SESSION_SECRET`, `TIMEZONE`, `SCHEDULE_ROLE_ID`, etc).
-4. Add a **Disk** (Render's persistent storage) mounted at your data
-   path — without this, your classes/overrides get wiped on redeploy.
+4. **Add a Disk** — this is the step that's easy to miss and causes exactly
+   the symptom of "my classes/overrides disappeared after a restart":
+   Render's filesystem is wiped on every restart and redeploy unless you
+   attach persistent storage. In your service → **Settings → Disks →
+   Add Disk**:
+   - Mount path: `/opt/render/project/src/data`
+   - Size: 1 GB is overkill already for this (JSON files are tiny)
+
+   If you already deployed without a disk and lost your data, this is
+   why — add the disk now and re-enter your classes once through the
+   admin panel; it'll stick from then on.
 5. Sign up free at **uptimerobot.com**, add an HTTP monitor hitting
    `https://your-app.onrender.com/health` every 5 minutes. As long as
    that ping never stops, Render never sees 15 minutes of inactivity

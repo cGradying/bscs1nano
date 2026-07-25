@@ -8,9 +8,12 @@ import {
   getOverrides,
   setOverrideForDate,
   setDayNote,
+  getSettings,
+  saveSettings,
 } from '../store.js';
 import { renderWeekImage } from '../render.js';
 import { publishSchedule } from '../publish.js';
+import { rescheduleFromSettings } from '../scheduler.js';
 import { now } from '../dates.js';
 import { config } from '../config.js';
 import dayjs from 'dayjs';
@@ -98,6 +101,17 @@ router.get('/api/preview.png', async (req, res) => {
   const date = req.query.date ? dayjs(req.query.date) : now();
   const buffer = await renderWeekImage(date.tz ? date.tz(config.timezone) : date);
   res.type('png').send(buffer);
+});
+
+router.get('/api/settings', (req, res) => {
+  res.json(getSettings());
+});
+
+router.post('/api/settings', (req, res) => {
+  const { postHour, postMinute } = req.body;
+  const settings = saveSettings({ postHour: Number(postHour), postMinute: Number(postMinute) });
+  rescheduleFromSettings();
+  res.json(settings);
 });
 
 router.post('/api/publish', async (req, res) => {

@@ -1,10 +1,14 @@
 import cron from 'node-cron';
 import { config } from './config.js';
 import { publishSchedule } from './publish.js';
+import { getSettings } from './store.js';
 
-export function startScheduler() {
-  const cronExpr = `${config.postMinute} ${config.postHour} * * *`;
-  cron.schedule(
+let task = null;
+
+function scheduleTask(hour, minute) {
+  if (task) task.stop();
+  const cronExpr = `${minute} ${hour} * * *`;
+  task = cron.schedule(
     cronExpr,
     async () => {
       try {
@@ -17,6 +21,18 @@ export function startScheduler() {
     { timezone: config.timezone }
   );
   console.log(
-    `[scheduler] daily post scheduled for ${config.postHour}:${String(config.postMinute).padStart(2, '0')} (${config.timezone})`
+    `[scheduler] daily post scheduled for ${hour}:${String(minute).padStart(2, '0')} (${config.timezone})`
   );
+}
+
+export function startScheduler() {
+  const { postHour, postMinute } = getSettings();
+  scheduleTask(postHour, postMinute);
+}
+
+// Called by the admin panel after saving a new post time — takes effect
+// immediately, no redeploy or restart needed.
+export function rescheduleFromSettings() {
+  const { postHour, postMinute } = getSettings();
+  scheduleTask(postHour, postMinute);
 }

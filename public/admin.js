@@ -2,6 +2,7 @@ const DAY_KEYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const DAY_NAMES = { Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday' };
 
 let schedule = null;
+let settings = null;
 let selectedDate = new Date().toISOString().slice(0, 10);
 
 async function api(path, opts) {
@@ -34,6 +35,7 @@ function dateToDayKey(dateStr) {
 
 async function load() {
   schedule = await api('/api/schedule');
+  settings = await api('/api/settings');
   render();
 }
 
@@ -45,6 +47,17 @@ function render() {
       <div style="display:flex; gap:8px;">
         <button class="pill-btn" id="logoutBtn">Log out</button>
         <button class="pill-btn primary" id="publishBtn">Publish now</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Daily auto-post time</h2>
+      <p style="color:var(--faint); font-size:12px; margin:-4px 0 10px;">
+        What time the schedule gets posted automatically every day. Takes effect immediately — no redeploy needed.
+      </p>
+      <div class="add-form">
+        <input type="time" id="postTime" value="${String(settings.postHour).padStart(2, '0')}:${String(settings.postMinute).padStart(2, '0')}" />
+        <button id="saveTimeBtn">Save time</button>
       </div>
     </div>
 
@@ -92,6 +105,14 @@ function render() {
     } catch (e) {
       toast('Publish failed — check bot token/channel');
     }
+  };
+  document.getElementById('saveTimeBtn').onclick = async () => {
+    const [h, m] = document.getElementById('postTime').value.split(':');
+    settings = await api('/api/settings', {
+      method: 'POST',
+      body: JSON.stringify({ postHour: h, postMinute: m }),
+    });
+    toast(`Daily post time set to ${document.getElementById('postTime').value}`);
   };
   document.getElementById('saveSectionBtn').onclick = async () => {
     schedule.section.name = document.getElementById('secName').value;
