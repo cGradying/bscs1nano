@@ -99,7 +99,19 @@ change it anytime afterward right from the admin panel — there's a
 "Daily auto-post time" field at the top of the dashboard. Save it and the
 schedule updates immediately, no redeploy or restart needed.
 
-## 8. Deploy somewhere it stays online 24/7
+## 8. One-time events (things that happen once, not every week)
+
+Weekly classes always repeat on the same day forever. For something that
+only happens once — an orientation day, a special seminar, an exam day —
+use the "One-time events" card in the admin panel instead of adding it as
+a class. Pick the exact date, give it a start/end time and a title, and
+it'll show up on the calendar that single time only — the same weekday
+the following week stays untouched. It shows up in a distinct purple
+style (📌) so it's visually obvious it's a one-off, not a recurring class,
+and it still counts toward that day's busy time (so the "good time to
+post" gold bands adjust around it correctly).
+
+## 9. Deploy somewhere it stays online 24/7
 
 A Discord bot needs a process that's *always running* — it holds a
 constant connection to Discord, and the 1am cron only fires if something
@@ -181,17 +193,34 @@ it never goes idle long enough to sleep.
 2. Build command: `npm install`. Start command: `npm start`.
 3. Add your environment variables (`DISCORD_TOKEN`, `CHANNEL_ID`,
    `ADMIN_PASSWORD`, `SESSION_SECRET`, `TIMEZONE`, `SCHEDULE_ROLE_ID`, etc).
-4. **Add a Disk** — this is the step that's easy to miss and causes exactly
-   the symptom of "my classes/overrides disappeared after a restart":
-   Render's filesystem is wiped on every restart and redeploy unless you
-   attach persistent storage. In your service → **Settings → Disks →
-   Add Disk**:
-   - Mount path: `/opt/render/project/src/data`
-   - Size: 1 GB is overkill already for this (JSON files are tiny)
+4. **Set up free persistent storage** — this is the step that's easy to
+   miss and causes exactly the symptom of "my classes/overrides
+   disappeared after a restart": Render wipes its filesystem on every
+   restart and redeploy, and **persistent Disks are a paid-only feature**
+   on Render — free web services can't attach one at all, so that's not
+   an option here. Instead, use a free MongoDB Atlas database — the app
+   already supports this automatically once you set one env var:
+   1. Sign up free at **mongodb.com/cloud/atlas** (no card needed for
+      the free tier).
+   2. Create a free **M0** cluster (permanently free, not a trial).
+   3. **Database Access** → add a database user (username + password).
+   4. **Network Access** → **Add IP Address** → **Allow Access from
+      Anywhere** (`0.0.0.0/0`) — needed since Render's free tier doesn't
+      have a fixed outbound IP.
+   5. **Connect** → **Drivers** → copy the connection string
+      (`mongodb+srv://user:pass@cluster.../`).
+   6. Add it to Render as env var `MONGODB_URI`.
 
-   If you already deployed without a disk and lost your data, this is
-   why — add the disk now and re-enter your classes once through the
-   admin panel; it'll stick from then on.
+   That's it — once `MONGODB_URI` is set, the app automatically stores
+   everything (classes, overrides, settings) in Atlas instead of local
+   files, and it survives restarts/redeploys/sleeping indefinitely.
+   Leave `MONGODB_URI` blank on hosts that *do* have a real disk (a VM,
+   Oracle Cloud, your own PC) — local JSON files work fine there and
+   Atlas isn't needed.
+
+   If you already deployed and lost your data, this is why — set up
+   Atlas now and re-enter your classes once through the admin panel;
+   it'll stick from then on.
 5. Sign up free at **uptimerobot.com**, add an HTTP monitor hitting
    `https://your-app.onrender.com/health` every 5 minutes. As long as
    that ping never stops, Render never sees 15 minutes of inactivity

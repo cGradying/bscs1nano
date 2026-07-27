@@ -31,9 +31,7 @@ app.listen(config.port, () => {
 });
 
 createBot()
-  .then(() => {
-    startScheduler();
-  })
+  .then(() => startScheduler())
   .catch((err) => {
     console.error('[bot] failed to start:', err);
   });

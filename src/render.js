@@ -1,7 +1,7 @@
 import { createCanvas, GlobalFonts } from '@napi-rs/canvas';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { getSchedule, getOverrides } from './store.js';
+import { getSchedule, getOverrides, getEventsForDate } from './store.js';
 import { DAY_KEYS, weekDatesFor, dateKey, now } from './dates.js';
 
 // Bundle our own font instead of relying on whatever (if anything) is
@@ -33,6 +33,8 @@ const COLORS = {
   gold: '#f2b84b',
   goldFill: 'rgba(242,184,75,0.16)',
   today: '#f2b84b',
+  event: '#c084fc',
+  eventFill: 'rgba(192,132,252,0.20)',
 };
 
 const PX_PER_HOUR = 42;
@@ -94,9 +96,9 @@ function computeFreeWindows(busyIntervals, dayStart, dayEnd) {
  * Applies any date-specific overrides (vacant / online) and highlights
  * the column matching `targetDate` as "today".
  */
-export function renderWeekImage(targetDate) {
-  const schedule = getSchedule();
-  const overrides = getOverrides();
+export async function renderWeekImage(targetDate) {
+  const schedule = await getSchedule();
+  const overrides = await getOverrides();
   const { dayStart, dayEnd } = schedule;
   const weekDates = weekDatesFor(targetDate);
   const todayKey = dateKey(now());
@@ -154,6 +156,7 @@ export function renderWeekImage(targetDate) {
   legendItem(COLORS.classBlueFill, 'Class');
   legendItem(COLORS.onlineFill, 'Online');
   legendItem(COLORS.vacantFill, 'Vacant / no class');
+  legendItem(COLORS.eventFill, 'One-time event');
   legendItem(COLORS.goldFill, 'Free — good time to post');
 
   // grid top
@@ -205,6 +208,8 @@ export function renderWeekImage(targetDate) {
   }
 
   // per-day columns: free bands + class blocks
+  const eventsByDate = await Promise.all(weekDates.map((d) => getEventsForDate(dateKey(d))));
+
   DAY_KEYS.forEach((dayKey, i) => {
     const x = gridLeft + i * COL_WIDTH;
     const d = weekDates[i];
@@ -214,6 +219,7 @@ export function renderWeekImage(targetDate) {
       ...c,
       status: dayOverrides[c.id] || 'scheduled',
     }));
+    const events = eventsByDate[i] || [];
 
     // vertical column divider
     ctx.strokeStyle = COLORS.gridLine;
@@ -222,7 +228,10 @@ export function renderWeekImage(targetDate) {
     ctx.lineTo(x, bodyTop + colHeight);
     ctx.stroke();
 
-    const busy = classes.filter((c) => c.status !== 'vacant').map((c) => [c.start, c.end]);
+    const busy = classes
+      .filter((c) => c.status !== 'vacant')
+      .map((c) => [c.start, c.end])
+      .concat(events.map((e) => [e.start, e.end]));
     const free = computeFreeWindows(busy, dayStart, dayEnd);
 
     // free bands (behind blocks)
@@ -283,6 +292,25 @@ export function renderWeekImage(targetDate) {
         ctx.font = `8.5px ${FONT_BOLD}`;
         ctx.fillText(label, x + 8, y + h - 12);
       }
+    });
+
+    // one-time event blocks (only ever drawn on their exact date, never repeat)
+    events.forEach((e) => {
+      const y = bodyTop + (e.start - dayStart) * PX_PER_HOUR;
+      const h = (e.end - e.start) * PX_PER_HOUR;
+      roundRect(ctx, x + 3, y + 1, COL_WIDTH - 6, Math.max(h - 2, 10), 5);
+      ctx.fillStyle = COLORS.eventFill;
+      ctx.fill();
+      ctx.strokeStyle = COLORS.event;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      ctx.fillStyle = COLORS.event;
+      ctx.font = `10.5px ${FONT_BOLD}`;
+      ctx.fillText('📌 EVENT', x + 8, y + 5);
+      ctx.fillStyle = COLORS.textDim;
+      ctx.font = `9px ${FONT}`;
+      wrapText(ctx, e.title, x + 8, y + 18, COL_WIDTH - 16, 11);
     });
   });
 

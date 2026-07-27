@@ -25,14 +25,14 @@ function scheduleTask(hour, minute) {
   );
 }
 
-export function startScheduler() {
-  const { postHour, postMinute } = getSettings();
+export async function startScheduler() {
+  const { postHour, postMinute } = await getSettings();
   scheduleTask(postHour, postMinute);
 }
 
 // Called by the admin panel after saving a new post time — takes effect
 // immediately, no redeploy or restart needed.
-export function rescheduleFromSettings() {
-  const { postHour, postMinute } = getSettings();
+export async function rescheduleFromSettings() {
+  const { postHour, postMinute } = await getSettings();
   scheduleTask(postHour, postMinute);
 }

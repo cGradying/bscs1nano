@@ -10,6 +10,10 @@ export const config = {
   postHour: Number(process.env.POST_HOUR ?? 1),
   postMinute: Number(process.env.POST_MINUTE ?? 0),
   port: Number(process.env.PORT ?? 3000),
+  // Optional: when set, data persists in MongoDB Atlas (free tier) instead
+  // of local JSON files. Needed on hosts (like Render's free tier) that
+  // don't offer persistent disks at all.
+  mongoUri: process.env.MONGODB_URI || null,
 };
 
 export function assertConfig() {

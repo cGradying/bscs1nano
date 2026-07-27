@@ -10,6 +10,9 @@ import {
   setDayNote,
   getSettings,
   saveSettings,
+  getEventsForDate,
+  addEvent,
+  removeEvent,
 } from '../store.js';
 import { renderWeekImage } from '../render.js';
 import { publishSchedule } from '../publish.js';
@@ -48,53 +51,69 @@ router.get('/', (req, res) => {
   res.type('html').send(dashboardPage());
 });
 
-router.get('/api/schedule', (req, res) => {
-  res.json(getSchedule());
+router.get('/api/schedule', async (req, res) => {
+  res.json(await getSchedule());
 });
 
-router.post('/api/section', (req, res) => {
-  const schedule = getSchedule();
+router.post('/api/section', async (req, res) => {
+  const schedule = await getSchedule();
   schedule.section = { ...schedule.section, ...req.body };
-  saveSchedule(schedule);
+  await saveSchedule(schedule);
   res.json(schedule);
 });
 
-router.post('/api/classes', (req, res) => {
+router.post('/api/classes', async (req, res) => {
   const { day, start, end, code, title, room } = req.body;
-  const id = addClass(day, { start: Number(start), end: Number(end), code, title, room: room || '' });
+  const id = await addClass(day, { start: Number(start), end: Number(end), code, title, room: room || '' });
   res.json({ id });
 });
 
-router.put('/api/classes/:day/:id', (req, res) => {
+router.put('/api/classes/:day/:id', async (req, res) => {
   const { day, id } = req.params;
   const patch = { ...req.body };
   if (patch.start !== undefined) patch.start = Number(patch.start);
   if (patch.end !== undefined) patch.end = Number(patch.end);
-  const ok = updateClass(day, id, patch);
+  const ok = await updateClass(day, id, patch);
   res.json({ ok });
 });
 
-router.delete('/api/classes/:day/:id', (req, res) => {
-  removeClass(req.params.day, req.params.id);
+router.delete('/api/classes/:day/:id', async (req, res) => {
+  await removeClass(req.params.day, req.params.id);
   res.json({ ok: true });
 });
 
-router.get('/api/overrides', (req, res) => {
+router.get('/api/overrides', async (req, res) => {
   const date = req.query.date;
-  const overrides = getOverrides();
+  const overrides = await getOverrides();
   res.json(overrides[date] || {});
 });
 
-router.post('/api/overrides', (req, res) => {
+router.post('/api/overrides', async (req, res) => {
   const { date, classId, status } = req.body;
-  const overrides = setOverrideForDate(date, classId, status);
+  const overrides = await setOverrideForDate(date, classId, status);
   res.json(overrides[date] || {});
 });
 
-router.post('/api/day-note', (req, res) => {
+router.post('/api/day-note', async (req, res) => {
   const { date, note } = req.body;
-  const overrides = setDayNote(date, note);
+  const overrides = await setDayNote(date, note);
   res.json(overrides[date] || {});
+});
+
+router.get('/api/events', async (req, res) => {
+  const date = req.query.date;
+  res.json(await getEventsForDate(date));
+});
+
+router.post('/api/events', async (req, res) => {
+  const { date, start, end, title, room } = req.body;
+  const id = await addEvent(date, { start: Number(start), end: Number(end), title, room: room || '' });
+  res.json({ id });
+});
+
+router.delete('/api/events/:date/:id', async (req, res) => {
+  await removeEvent(req.params.date, req.params.id);
+  res.json({ ok: true });
 });
 
 router.get('/api/preview.png', async (req, res) => {
@@ -103,14 +122,14 @@ router.get('/api/preview.png', async (req, res) => {
   res.type('png').send(buffer);
 });
 
-router.get('/api/settings', (req, res) => {
-  res.json(getSettings());
+router.get('/api/settings', async (req, res) => {
+  res.json(await getSettings());
 });
 
-router.post('/api/settings', (req, res) => {
+router.post('/api/settings', async (req, res) => {
   const { postHour, postMinute } = req.body;
-  const settings = saveSettings({ postHour: Number(postHour), postMinute: Number(postMinute) });
-  rescheduleFromSettings();
+  const settings = await saveSettings({ postHour: Number(postHour), postMinute: Number(postMinute) });
+  await rescheduleFromSettings();
   res.json(settings);
 });
 

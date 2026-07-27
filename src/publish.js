@@ -25,7 +25,7 @@ export async function publishSchedule({ force = false } = {}) {
   const today = now();
   const payload = await buildWeekPayload(today, 'current');
 
-  const state = getState();
+  const state = await getState();
   const wKey = weekKeyFor(today);
 
   let resultMsg;
@@ -44,7 +44,7 @@ export async function publishSchedule({ force = false } = {}) {
   if (!resultMsg) {
     resultMsg = await channel.send(payload);
     mode = 'posted';
-    saveState({ lastMessageId: resultMsg.id, lastMessageWeekKey: wKey });
+    await saveState({ lastMessageId: resultMsg.id, lastMessageWeekKey: wKey });
   }
 
   if (config.scheduleRoleId) {

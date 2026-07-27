@@ -85,6 +85,20 @@ function render() {
       <div style="margin-top:8px;"><button class="pill-btn primary" id="saveNoteBtn">Save note</button></div>
     </div>
 
+    <div class="card">
+      <h2>One-time events for ${selectedDate}</h2>
+      <p style="color:var(--faint); font-size:12px; margin:-4px 0 10px;">
+        Only shows up on this exact date — unlike weekly classes, it never repeats.
+      </p>
+      <div id="eventList"></div>
+      <div class="add-form">
+        <input type="number" step="0.5" placeholder="Start" id="evStart" style="width:56px" />
+        <input type="number" step="0.5" placeholder="End" id="evEnd" style="width:56px" />
+        <input type="text" placeholder="Event title" id="evTitle" style="flex:1;" />
+        <button id="addEventBtn">Add event</button>
+      </div>
+    </div>
+
     <div class="card preview">
       <h2>Live preview (what gets posted to Discord)</h2>
       <img id="previewImg" src="/api/preview.png?date=${selectedDate}&t=${Date.now()}" />
@@ -93,6 +107,7 @@ function render() {
 
   renderDayGrid();
   loadOverridesFor(selectedDate);
+  loadEventsFor(selectedDate);
 
   document.getElementById('logoutBtn').onclick = () => {
     fetch('/logout', { method: 'POST' }).then(() => (window.location.href = '/login'));
@@ -129,6 +144,16 @@ function render() {
     const note = document.getElementById('dayNote').value;
     await api('/api/day-note', { method: 'POST', body: JSON.stringify({ date: selectedDate, note }) });
     toast('Note saved');
+    refreshPreview();
+  };
+  document.getElementById('addEventBtn').onclick = async () => {
+    const start = document.getElementById('evStart').value;
+    const end = document.getElementById('evEnd').value;
+    const title = document.getElementById('evTitle').value;
+    if (!start || !end || !title) return toast('Fill start/end/title');
+    await api('/api/events', { method: 'POST', body: JSON.stringify({ date: selectedDate, start, end, title }) });
+    toast('Event added');
+    await loadEventsFor(selectedDate);
     refreshPreview();
   };
 }
@@ -231,6 +256,33 @@ async function loadOverridesFor(dateStr) {
     });
   }
   document.getElementById('dayNote').value = overrides._note || '';
+}
+
+async function loadEventsFor(dateStr) {
+  const events = await api(`/api/events?date=${dateStr}`);
+  const list = document.getElementById('eventList');
+  if (!events.length) {
+    list.innerHTML = `<p style="color:var(--faint); font-size:13px;">No one-time events on ${dateStr}.</p>`;
+    return;
+  }
+  list.innerHTML = events.map((e) => `
+    <div class="class-row" data-id="${e.id}">
+      <strong>📌 ${escapeHtml(e.title)}</strong>
+      <span class="meta">${fmtHour(e.start)}–${fmtHour(e.end)}</span>
+      <div class="row-actions">
+        <button class="danger delete">Delete</button>
+      </div>
+    </div>
+  `).join('');
+  events.forEach((e) => {
+    const row = list.querySelector(`[data-id="${e.id}"]`);
+    row.querySelector('.delete').onclick = async () => {
+      await api(`/api/events/${dateStr}/${e.id}`, { method: 'DELETE' });
+      toast('Event removed');
+      await loadEventsFor(dateStr);
+      refreshPreview();
+    };
+  });
 }
 
 function refreshPreview() {

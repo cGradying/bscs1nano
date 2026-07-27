@@ -1,14 +1,21 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { MongoClient } from 'mongodb';
+import { config } from './config.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, '..', 'data');
-const SCHEDULE_FILE = path.join(DATA_DIR, 'schedule.json');
-const OVERRIDES_FILE = path.join(DATA_DIR, 'overrides.json');
-const STATE_FILE = path.join(DATA_DIR, 'state.json');
 
-function readJson(file, fallback) {
+const FILES = {
+  schedule: path.join(DATA_DIR, 'schedule.json'),
+  overrides: path.join(DATA_DIR, 'overrides.json'),
+  state: path.join(DATA_DIR, 'state.json'),
+  settings: path.join(DATA_DIR, 'settings.json'),
+  events: path.join(DATA_DIR, 'events.json'),
+};
+
+function readJsonFile(file, fallback) {
   try {
     return JSON.parse(fs.readFileSync(file, 'utf-8'));
   } catch {
@@ -16,9 +23,42 @@ function readJson(file, fallback) {
   }
 }
 
-function writeJson(file, data) {
+function writeJsonFile(file, data) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, JSON.stringify(data, null, 2));
+}
+
+// --- Mongo backend (used automatically when MONGODB_URI is set — this is
+// what lets data survive on hosts like Render's free tier, which has no
+// persistent disk at all). Falls back to local JSON files otherwise, which
+// is fine on any host with a real disk (a VM, Oracle Cloud, your own PC). ---
+let dbPromise = null;
+function getDb() {
+  if (!config.mongoUri) return null;
+  if (!dbPromise) {
+    const client = new MongoClient(config.mongoUri);
+    dbPromise = client.connect().then((c) => c.db('schedule_bot'));
+  }
+  return dbPromise;
+}
+
+async function readDoc(key, fallback) {
+  const db = await getDb();
+  if (db) {
+    const doc = await db.collection('docs').findOne({ _id: key });
+    return doc ? doc.data : fallback;
+  }
+  return readJsonFile(FILES[key], fallback);
+}
+
+async function writeDoc(key, data) {
+  const db = await getDb();
+  if (db) {
+    await db.collection('docs').updateOne({ _id: key }, { $set: { data } }, { upsert: true });
+  } else {
+    writeJsonFile(FILES[key], data);
+  }
+  return data;
 }
 
 const DEFAULT_SCHEDULE = {
@@ -28,27 +68,25 @@ const DEFAULT_SCHEDULE = {
   classes: { Mon: [], Tue: [], Wed: [], Thu: [], Fri: [], Sat: [], Sun: [] },
 };
 
-export function getSchedule() {
-  return readJson(SCHEDULE_FILE, DEFAULT_SCHEDULE);
+export async function getSchedule() {
+  return readDoc('schedule', DEFAULT_SCHEDULE);
 }
 
-export function saveSchedule(schedule) {
-  writeJson(SCHEDULE_FILE, schedule);
-  return schedule;
+export async function saveSchedule(schedule) {
+  return writeDoc('schedule', schedule);
 }
 
 // overrides: { "YYYY-MM-DD": { "<classId>": "vacant" | "online", "_note": "string" } }
-export function getOverrides() {
-  return readJson(OVERRIDES_FILE, {});
+export async function getOverrides() {
+  return readDoc('overrides', {});
 }
 
-export function saveOverrides(overrides) {
-  writeJson(OVERRIDES_FILE, overrides);
-  return overrides;
+export async function saveOverrides(overrides) {
+  return writeDoc('overrides', overrides);
 }
 
-export function setOverrideForDate(dateKey, classId, status) {
-  const overrides = getOverrides();
+export async function setOverrideForDate(dateKey, classId, status) {
+  const overrides = await getOverrides();
   if (!overrides[dateKey]) overrides[dateKey] = {};
   if (status === 'none' || !status) {
     delete overrides[dateKey][classId];
@@ -56,12 +94,12 @@ export function setOverrideForDate(dateKey, classId, status) {
   } else {
     overrides[dateKey][classId] = status;
   }
-  saveOverrides(overrides);
+  await saveOverrides(overrides);
   return overrides;
 }
 
-export function setDayNote(dateKey, note) {
-  const overrides = getOverrides();
+export async function setDayNote(dateKey, note) {
+  const overrides = await getOverrides();
   if (!overrides[dateKey]) overrides[dateKey] = {};
   if (note) {
     overrides[dateKey]._note = note;
@@ -69,58 +107,92 @@ export function setDayNote(dateKey, note) {
     delete overrides[dateKey]._note;
     if (Object.keys(overrides[dateKey]).length === 0) delete overrides[dateKey];
   }
-  saveOverrides(overrides);
+  await saveOverrides(overrides);
   return overrides;
 }
 
 const DEFAULT_STATE = { lastMessageId: null, lastMessageWeekKey: null };
 
-export function getState() {
-  return readJson(STATE_FILE, DEFAULT_STATE);
+export async function getState() {
+  return readDoc('state', DEFAULT_STATE);
 }
 
-export function saveState(state) {
-  writeJson(STATE_FILE, state);
-  return state;
+export async function saveState(state) {
+  return writeDoc('state', state);
 }
 
 // --- class CRUD helpers ---
-export function addClass(day, cls) {
-  const schedule = getSchedule();
+export async function addClass(day, cls) {
+  const schedule = await getSchedule();
   if (!schedule.classes[day]) schedule.classes[day] = [];
   const id = 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   schedule.classes[day].push({ id, ...cls });
-  saveSchedule(schedule);
+  await saveSchedule(schedule);
   return id;
 }
 
-export function updateClass(day, classId, patch) {
-  const schedule = getSchedule();
+export async function updateClass(day, classId, patch) {
+  const schedule = await getSchedule();
   const list = schedule.classes[day] || [];
   const idx = list.findIndex((c) => c.id === classId);
   if (idx === -1) return false;
   list[idx] = { ...list[idx], ...patch };
-  saveSchedule(schedule);
+  await saveSchedule(schedule);
   return true;
 }
 
-export function removeClass(day, classId) {
-  const schedule = getSchedule();
+export async function removeClass(day, classId) {
+  const schedule = await getSchedule();
   schedule.classes[day] = (schedule.classes[day] || []).filter((c) => c.id !== classId);
-  saveSchedule(schedule);
+  await saveSchedule(schedule);
   return true;
 }
 
 // --- admin-configurable settings (daily post time) ---
-const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 const DEFAULT_SETTINGS = { postHour: 1, postMinute: 0 };
 
-export function getSettings() {
-  return { ...DEFAULT_SETTINGS, ...readJson(SETTINGS_FILE, DEFAULT_SETTINGS) };
+export async function getSettings() {
+  const s = await readDoc('settings', DEFAULT_SETTINGS);
+  return { ...DEFAULT_SETTINGS, ...s };
 }
 
-export function saveSettings(settings) {
-  const merged = { ...getSettings(), ...settings };
-  writeJson(SETTINGS_FILE, merged);
+export async function saveSettings(settings) {
+  const merged = { ...(await getSettings()), ...settings };
+  await writeDoc('settings', merged);
   return merged;
+}
+
+// --- one-time events: { "YYYY-MM-DD": [ {id, start, end, title, room} ] }
+// Unlike schedule.classes (which repeats every week on the same day-of-week
+// forever), these only ever show up on the exact date they're filed under —
+// e.g. a single seminar, an exam day, an orientation — then never again.
+export async function getEvents() {
+  return readDoc('events', {});
+}
+
+export async function saveEvents(events) {
+  return writeDoc('events', events);
+}
+
+export async function getEventsForDate(dateKey) {
+  const events = await getEvents();
+  return events[dateKey] || [];
+}
+
+export async function addEvent(dateKey, event) {
+  const events = await getEvents();
+  if (!events[dateKey]) events[dateKey] = [];
+  const id = 'e' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  events[dateKey].push({ id, ...event });
+  await saveEvents(events);
+  return id;
+}
+
+export async function removeEvent(dateKey, eventId) {
+  const events = await getEvents();
+  if (!events[dateKey]) return false;
+  events[dateKey] = events[dateKey].filter((e) => e.id !== eventId);
+  if (events[dateKey].length === 0) delete events[dateKey];
+  await saveEvents(events);
+  return true;
 }
