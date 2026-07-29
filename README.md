@@ -1,157 +1,179 @@
 # Section Schedule Bot
 
-A Discord bot that posts your section's weekly class schedule as an image
-every day at **1:00 AM** (configurable), plus a password-protected admin
-web page where you (or another officer) can:
+Discord bot that renders a section's weekly class schedule to PNG and posts it
+on a daily cron, with an authenticated Express admin panel for editing the
+schedule and marking per-date exceptions.
 
-- Add/edit/delete recurring classes for each day
-- Mark a specific date's class as **Vacant / no class** or **Moved online**
-- Add a note for a specific day (e.g. "Suspended — no classes")
-- Hit **Publish now** to push the update to Discord immediately — no
-  waiting for 1am, and it edits the same message instead of spamming
-  the channel if it's still the same week
-- Preview exactly what will be posted before it goes out
+Node >= 18, ESM (`"type": "module"`). One process runs all three subsystems:
+Express server, Discord client, cron scheduler.
 
-The image always uses the **real current date** — it's generated fresh
-on each post/preview, it's never a static picture.
+## Stack
 
-## Use cases
+| Concern | Package |
+|---|---|
+| Discord gateway + slash commands | `discord.js` ^14 |
+| PNG rendering | `@napi-rs/canvas` |
+| Cron | `node-cron` |
+| Timezone-aware dates | `dayjs` |
+| Admin panel | `express`, `express-session` |
+| Optional persistence | `mongodb` |
 
-- Class officer who's tired of manually re-typing/re-posting the weekly
-  schedule in Discord every day.
-- Sections with frequent one-off changes (moved online, cancelled, holiday) —
-  update once in the admin panel instead of editing a shared spreadsheet and
-  re-announcing.
-- Students who just want `/schedule` on demand instead of scrolling channel
-  history for the last posted image.
-
----
-
-## 1. Create the Discord bot
-
-1. Go to <https://discord.com/developers/applications> → **New Application**.
-2. **Bot** tab → **Reset Token** → copy it. This is your `DISCORD_TOKEN`.
-3. Still on the **Bot** tab, nothing extra needs to be toggled on for this
-   bot (it doesn't read messages, just posts).
-4. **OAuth2 → URL Generator**:
-   - Scopes: `bot`, `applications.commands`
-   - Bot permissions: `Send Messages`, `Embed Links`, `Attach Files`,
-     `Use Slash Commands`
-   - Open the generated URL and invite the bot to your server.
-5. Turn on Developer Mode in Discord (User Settings → Advanced), then
-   right-click the channel you want announcements in → **Copy Channel ID**.
-   This is your `CHANNEL_ID`.
-
-## 2. Configure
-
-Copy `.env.example` to `.env` and fill it in:
+## Architecture
 
 ```
-DISCORD_TOKEN=...
-CHANNEL_ID=...
-ADMIN_PASSWORD=pick-something-only-your-officers-know
-SESSION_SECRET=any-long-random-string
-TIMEZONE=Asia/Manila
-POST_HOUR=1
-POST_MINUTE=0
-PORT=3000
+src/index.js          boots Express + Discord client + cron in one process
+  ├─ src/bot.js         gateway client, slash command registration
+  ├─ src/scheduler.js   node-cron job, rescheduleFromSettings()
+  └─ src/routes/admin.js  Express router, session auth, /api/*
+
+publish.js → scheduleView.js → render.js → store.js
+             (embed+buttons)   (PNG)      (persistence)
 ```
 
-## 3. Edit the starting schedule
+`store.js` is the persistence abstraction. Backend is selected at runtime:
+MongoDB when `MONGODB_URI` is set, otherwise JSON files under `data/`. Every
+accessor is `async` regardless of backend. Never read `data/*.json` directly
+from another module — that bypasses the Mongo path.
 
-`data/schedule.json` ships with placeholder sample classes so you can see
-the format. Easiest way to set it up for real: run the bot once, log into
-the admin panel, delete the sample classes and add your section's actual
-ones — no need to hand-edit JSON. (You can also edit the file directly if
-you prefer; the admin panel just edits this same file.)
+### Data model
 
-## 4. Run it locally first (recommended before deploying)
+| Store | File | Shape |
+|---|---|---|
+| Schedule | `data/schedule.json` | `{ section, dayStart, dayEnd, classes: { Mon..Sun: [] } }` |
+| Overrides | `data/overrides.json` | `{ "YYYY-MM-DD": { "<classId>": "vacant"\|"online", _note?: string } }` |
+| Events | `data/events.json` | keyed by exact `YYYY-MM-DD`, one-time only |
+| Settings | `data/settings.json` | `{ postHour, postMinute }` |
+| State | `data/state.json` | `{ lastMessageId, lastMessageWeekKey }` |
+
+`settings.json` and `events.json` are created on first write; defaults come
+from the `DEFAULT_*` constants in `store.js`.
+
+**Times are decimal hours** throughout classes, events and grid math —
+`13.5` is 1:30 PM. `computeFreeWindows` in `render.js` inverts busy intervals
+to draw the "free time" bands; anything that should block a band must be
+pushed into the `busy` array.
+
+Recurring classes (`schedule.classes[Mon..Sun]`) repeat weekly forever.
+Events are separate and render only on their exact date.
+
+`_note` is a reserved key inside a day's override object — code iterating
+overrides must skip it.
+
+### Post semantics
+
+`publish.js` decides edit-vs-new from `state.json`:
+
+- Admin edit within the same ISO week → edits `lastMessageId` in place.
+- `force: true` (daily cron, `/publish`, "Publish now") → always sends new.
+
+Every publish also sends a separate role-ping message, so the embed is never
+updated silently.
+
+`scheduleView.js` is stateless: week-nav buttons encode everything in the
+custom ID (`sched_nav:<current|next>:<YYYY-MM-DD anchor>`), so old messages
+keep working with no server-side session.
+
+`dates.js` is the only module that touches timezones. Weeks are Mon–Sun,
+identified by their Monday (`weekKeyFor`). Use `now()`, not `dayjs()`, so
+`TIMEZONE` is respected.
+
+## Discord application setup
+
+1. <https://discord.com/developers/applications> → **New Application**.
+2. **Bot** → **Reset Token** → `DISCORD_TOKEN`. No privileged intents needed;
+   the bot posts and never reads message content.
+3. **OAuth2 → URL Generator** → scopes `bot`, `applications.commands`;
+   permissions `Send Messages`, `Embed Links`, `Attach Files`,
+   `Use Slash Commands`. Invite via the generated URL.
+4. Enable Developer Mode (User Settings → Advanced), then right-click the
+   target channel → **Copy Channel ID** → `CHANNEL_ID`.
+5. Optional ping role: right-click role → **Copy Role ID** →
+   `SCHEDULE_ROLE_ID`. The role must allow `@mention` by anyone, or grant the
+   bot "Mention @everyone, @here, and All Roles". Blank disables pings.
+
+## Configuration
+
+`cp .env.example .env`
+
+| Variable | Required | Default | Notes |
+|---|---|---|---|
+| `DISCORD_TOKEN` | yes | — | Missing only warns; the web half still boots |
+| `CHANNEL_ID` | yes | — | Target announcement channel |
+| `SCHEDULE_ROLE_ID` | no | — | Blank disables the ping message |
+| `ADMIN_PASSWORD` | yes | — | Admin panel login |
+| `SESSION_SECRET` | yes | — | `express-session` signing key |
+| `TIMEZONE` | no | `Asia/Manila` | IANA name, drives all date math |
+| `POST_HOUR` | no | `1` | Initial cron hour; overridden by settings store |
+| `POST_MINUTE` | no | `0` | Initial cron minute |
+| `PORT` | no | `3000` | Express listen port |
+| `MONGODB_URI` | no | — | When set, switches `store.js` to MongoDB |
+
+`config.js` reads all env vars into one exported object. `assertConfig()`
+warns on missing values rather than exiting.
+
+## Run
 
 ```
 npm install
-npm start
+npm start          # node src/index.js
 ```
 
-Then open `http://localhost:3000`, log in with `ADMIN_PASSWORD`, add your
-real classes, and click **Publish now** to test that it posts to Discord.
+Admin panel at `http://localhost:3000`, login with `ADMIN_PASSWORD`.
+`GET /api/preview.png` renders the same image the bot posts — the fastest way
+to iterate on `render.js` without touching Discord.
 
----
+`data/schedule.json` ships with sample classes. Replace them through the admin
+panel or by editing the file; both write the same store.
 
-## 5. Turn on the @role ping (optional)
+## Admin HTTP API
 
-Every time the bot posts or updates the schedule (daily cron, or "Publish
-now" from the admin panel), it sends a short follow-up message that
-`@mentions` a role so people actually get notified — the schedule embed
-itself is never edited-in-place silently.
+`router.use(requireAuth)` sits mid-file in `routes/admin.js`. Routes declared
+after it require a session; `/login` is declared before and is public.
 
-1. In Discord: Server Settings → Roles → create or pick a role
-   (e.g. `@schedule`). Make sure it's set to "Allow anyone to @mention
-   this role", **or** give the bot the "Mention @everyone, @here, and
-   All Roles" permission.
-2. Right-click the role → **Copy Role ID** (Developer Mode must be on).
-3. Put it in `.env` as `SCHEDULE_ROLE_ID`.
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/schedule` | Full schedule document |
+| `POST` | `/api/section` | Update section name/program |
+| `POST` | `/api/classes` | Add a recurring class |
+| `PUT` | `/api/classes/:day/:id` | Patch a class |
+| `DELETE` | `/api/classes/:day/:id` | Remove a class |
+| `GET`/`POST` | `/api/overrides` | Per-date vacant/online status |
+| `POST` | `/api/day-note` | Set a day's `_note` |
+| `GET`/`POST` | `/api/events` | One-time events |
+| `DELETE` | `/api/events/:date/:id` | Remove an event |
+| `GET` | `/api/preview.png` | Render current week to PNG |
+| `GET`/`POST` | `/api/settings` | Daily post time |
+| `POST` | `/api/publish` | Force a fresh post |
 
-Leave it blank to disable pings entirely — the schedule will still post,
-just without the mention.
+Changing post time at runtime requires `rescheduleFromSettings()` after
+`saveSettings()` (see `POST /api/settings`) — `node-cron` will not pick up the
+new time otherwise.
 
-## 6. This Week / Next Week buttons
-
-Every post includes two buttons under the image so people can flip
-between the current week and next week without you posting two separate
-images. It's stateless — clicking just re-renders on the spot — so it
-keeps working correctly no matter how long the message has been sitting
-there, and it doesn't re-ping anyone (only actual schedule updates do).
-
-## 7. Changing the daily post time
-
-`POST_HOUR`/`POST_MINUTE` in `.env` only set the *starting* time. You can
-change it anytime afterward right from the admin panel — there's a
-"Daily auto-post time" field at the top of the dashboard. Save it and the
-schedule updates immediately, no redeploy or restart needed.
-
-## 8. One-time events (things that happen once, not every week)
-
-Weekly classes always repeat on the same day forever. For something that
-only happens once — an orientation day, a special seminar, an exam day —
-use the "One-time events" card in the admin panel instead of adding it as
-a class. Pick the exact date, give it a start/end time and a title, and
-it'll show up on the calendar that single time only — the same weekday
-the following week stays untouched. It shows up in a distinct purple
-style (📌) so it's visually obvious it's a one-off, not a recurring class,
-and it still counts toward that day's busy time (so the "good time to
-post" gold bands adjust around it correctly).
-
-## How the "real-time" update works
-
-- The daily 1am job always posts a **new** message.
-- Any change from the admin panel (marking a class vacant/online, adding
-  a note, or clicking **Publish now**) re-renders the image and **edits
-  that same day's message** if one's already been posted this week —
-  so the channel shows the latest state without extra clutter, and
-  students see the update the moment you save it.
-
-## Why the image looked garbled after deploying
-
-If the schedule image renders fine locally but comes out as broken/garbled
-glyphs once posted from your deployed host (Railway, Render, etc.), it's
-because that container has no fonts installed at all, so canvas silently
-substitutes a broken glyph set. This is now fixed by bundling
-`assets/fonts/Roboto-Regular.ttf` and `Roboto-Bold.ttf` directly in the
-project and registering them at startup (`src/render.js`), so the image
-renders identically everywhere regardless of what fonts the host has.
-Don't delete the `assets/fonts` folder.
-
-## Customizing the look
-
-Colors, fonts, and layout live in `src/render.js` (`COLORS` object at the
-top). It mirrors the blueprint-blue/terminal-green/gold theme from your
-original two-person HTML calendar, just condensed to one section.
+The admin UI is vanilla JS in `public/admin.js` against these JSON endpoints;
+`routes/admin.js` serves two HTML shells as inline template strings.
 
 ## Slash commands
 
-- `/schedule` — anyone can run this to see the current week's schedule
-  on demand (ephemeral to them, doesn't post publicly).
-- `/publish` — force a fresh post (same as the admin panel's button).
+Registered globally on every `ready` via
+`REST.put(Routes.applicationCommands(...))`, so command changes take effect on
+restart with no separate deploy script.
+
+| Command | Access | Behavior |
+|---|---|---|
+| `/schedule` | anyone | Ephemeral render of the current week |
+| `/publish` | anyone | Forces a fresh public post |
+
+## Rendering notes
+
+`assets/fonts/Roboto-Regular.ttf` and `Roboto-Bold.ttf` are registered at
+import time in `src/render.js`. **Do not remove them** — containers frequently
+ship zero system fonts, and canvas silently renders garbled glyphs rather than
+erroring.
+
+Colors, fonts and layout live in the `COLORS` object at the top of
+`src/render.js`.
+
+Log prefixes: `[bot]`, `[web]`, `[publish]`, `[scheduler]`, `[config]`.
 
 ---
 
@@ -159,6 +181,6 @@ original two-person HTML calendar, just condensed to one section.
 
 **Author:** [cGradying](https://github.com/cGradying)
 
-![astra cosmic](https://img.shields.io/badge/cGradying-astra%20cosmic-F97316?style=for-the-badge&labelColor=0B1120)
+![astra](https://img.shields.io/badge/cGradying-astra-10B981?style=for-the-badge&labelColor=0B1120)
 
 </div>
