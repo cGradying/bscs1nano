@@ -179,8 +179,6 @@ Log prefixes: `[bot]`, `[web]`, `[publish]`, `[scheduler]`, `[config]`.
 
 <div align="center">
 
-**Author:** [cGradying](https://github.com/cGradying)
-
-![astra](https://img.shields.io/badge/cGradying-astra-10B981?style=for-the-badge&labelColor=0B1120)
+[![Author: cGradying](https://img.shields.io/badge/cGradying-AUTHOR-10B981?style=for-the-badge&labelColor=0B1120)](https://github.com/cGradying)
 
 </div>
