@@ -250,6 +250,16 @@ verification (a common complaint): GCP's `e2-micro` in `us-west1`,
 pm2 setup as Option A once the VM is up — smaller (1 shared vCPU, 1GB RAM)
 but this bot is light enough to not need more.
 
+### Why not Vercel?
+
+Vercel's free tier is generous and comes up a lot, but it only runs
+serverless functions — no persistent process. This bot holds a live
+WebSocket to Discord's Gateway (the connection the cron and admin panel
+both depend on), and a serverless function gets frozen between requests,
+which kills that connection immediately. Vercel only fits a bot rebuilt
+around Discord's HTTP Interactions endpoint instead of the Gateway — a
+different architecture, not a drop-in deploy target for this one.
+
 ---
 
 ## How the "real-time" update works
