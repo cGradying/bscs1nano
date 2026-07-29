@@ -15,6 +15,16 @@ web page where you (or another officer) can:
 The image always uses the **real current date** — it's generated fresh
 on each post/preview, it's never a static picture.
 
+## Use cases
+
+- Class officer who's tired of manually re-typing/re-posting the weekly
+  schedule in Discord every day.
+- Sections with frequent one-off changes (moved online, cancelled, holiday) —
+  update once in the admin panel instead of editing a shared spreadsheet and
+  re-announcing.
+- Students who just want `/schedule` on demand instead of scrolling channel
+  history for the last posted image.
+
 ---
 
 ## 1. Create the Discord bot
@@ -232,6 +242,14 @@ it never goes idle long enough to sleep.
 Either way: once deployed, your admin panel is at
 `http://<host>/login` (or `https://your-app.onrender.com/login` on Render).
 
+### Option C — Google Cloud "Always Free" e2-micro VM (Oracle alternative)
+
+Worth knowing if Oracle's free-tier signup gets stuck on identity
+verification (a common complaint): GCP's `e2-micro` in `us-west1`,
+`us-central1`, or `us-east1` is also permanently free, no sleeping. Same
+pm2 setup as Option A once the VM is up — smaller (1 shared vCPU, 1GB RAM)
+but this bot is light enough to not need more.
+
 ---
 
 ## How the "real-time" update works
@@ -265,3 +283,13 @@ original two-person HTML calendar, just condensed to one section.
 - `/schedule` — anyone can run this to see the current week's schedule
   on demand (ephemeral to them, doesn't post publicly).
 - `/publish` — force a fresh post (same as the admin panel's button).
+
+---
+
+<div align="center">
+
+**Author:** [cGradying](https://github.com/cGradying)
+
+![astra cosmic](https://img.shields.io/badge/cGradying-astra%20cosmic-F97316?style=for-the-badge&labelColor=0B1120)
+
+</div>
