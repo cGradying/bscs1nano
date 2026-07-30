@@ -20,12 +20,18 @@ Express server, Discord client, cron scheduler.
 
 ## Architecture
 
+Module ownership — one process, three subsystems:
+
 ```
 src/index.js          boots Express + Discord client + cron in one process
   ├─ src/bot.js         gateway client, slash command registration
   ├─ src/scheduler.js   node-cron job, rescheduleFromSettings()
   └─ src/routes/admin.js  Express router, session auth, /api/*
+```
 
+Request flow for a single post:
+
+```
 publish.js → scheduleView.js → render.js → store.js
              (embed+buttons)   (PNG)      (persistence)
 ```
@@ -100,8 +106,8 @@ identified by their Monday (`weekKeyFor`). Use `now()`, not `dayjs()`, so
 | `DISCORD_TOKEN` | yes | — | Missing only warns; the web half still boots |
 | `CHANNEL_ID` | yes | — | Target announcement channel |
 | `SCHEDULE_ROLE_ID` | no | — | Blank disables the ping message |
-| `ADMIN_PASSWORD` | yes | — | Admin panel login |
-| `SESSION_SECRET` | yes | — | `express-session` signing key |
+| `ADMIN_PASSWORD` | no | `change-me` | Admin panel login — set a real value, the fallback is public |
+| `SESSION_SECRET` | no | `insecure-dev-secret` | `express-session` signing key — set a real value in any shared deployment |
 | `TIMEZONE` | no | `Asia/Manila` | IANA name, drives all date math |
 | `POST_HOUR` | no | `1` | Initial cron hour; overridden by settings store |
 | `POST_MINUTE` | no | `0` | Initial cron minute |
