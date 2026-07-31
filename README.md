@@ -131,6 +131,20 @@ to iterate on `render.js` without touching Discord.
 `data/schedule.json` ships with sample classes. Replace them through the admin
 panel or by editing the file; both write the same store.
 
+## Calendar feed
+
+`GET /feed.ics` — public, unauthenticated. Subscribe from Google Calendar
+("Other calendars → From URL") or Apple Calendar ("File → New Calendar
+Subscription") to pull the recurring weekly classes directly.
+
+Generated fresh on every request from `src/ics.js`: a rolling 4-week window
+starting from the current week, one `VEVENT` per class occurrence, times
+converted from local decimal hours to UTC (no `VTIMEZONE` block needed).
+Overrides (vacant/online), day notes, and one-time events are **not**
+reflected in this feed — it always shows the base recurring schedule.
+Calendar clients poll a subscribed feed roughly every 12-24h; this is not a
+push update.
+
 ## Admin HTTP API
 
 `router.use(requireAuth)` sits mid-file in `routes/admin.js`. Routes declared
