@@ -7,7 +7,35 @@ import { now, dateFromKey } from './dates.js';
 const commands = [
   new SlashCommandBuilder().setName('schedule').setDescription("Show this week's schedule right now"),
   new SlashCommandBuilder().setName('publish').setDescription('Force-repost the schedule to the announcement channel'),
+  new SlashCommandBuilder()
+    .setName('calendar')
+    .setDescription('Get the link to subscribe to this schedule in Google or Apple Calendar'),
 ].map((c) => c.toJSON());
+
+function buildCalendarReply() {
+  if (!config.publicUrl) {
+    return 'The calendar feed URL is not configured yet — an officer needs to set `PUBLIC_URL` in the bot\'s environment.';
+  }
+  const feed = `${config.publicUrl}/feed.ics`;
+  return [
+    '**Subscribe to the class schedule**',
+    '',
+    `\`${feed}\``,
+    '',
+    '**Google Calendar** (do this on a computer — the phone app cannot add feeds):',
+    '1. Open <https://calendar.google.com>',
+    '2. Left sidebar → **Other calendars** → **+** → **From URL**',
+    '3. Paste the link above → **Add calendar**',
+    '',
+    '**Apple Calendar** (iPhone: Calendars → Add Calendar → Add Subscription Calendar):',
+    '1. Mac: **File** → **New Calendar Subscription**',
+    '2. Paste the link above → **Subscribe**',
+    '',
+    'It shows the next 4 weeks of classes and refreshes on its own. Calendar apps ' +
+      'check for updates every 12-24 hours, so a schedule change may take a while to appear. ' +
+      'Day-to-day changes (vacant/online, one-time events) are not included — watch the channel for those.',
+  ].join('\n');
+}
 
 export async function createBot() {
   const client = new Client({ intents: [GatewayIntentBits.Guilds] });
@@ -30,6 +58,10 @@ export async function createBot() {
         await interaction.deferReply();
         const payload = await buildWeekPayload(now(), 'current');
         await interaction.editReply(payload);
+      }
+
+      if (interaction.commandName === 'calendar') {
+        await interaction.reply({ content: buildCalendarReply(), ephemeral: true });
       }
 
       if (interaction.commandName === 'publish') {

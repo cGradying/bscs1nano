@@ -112,6 +112,7 @@ identified by their Monday (`weekKeyFor`). Use `now()`, not `dayjs()`, so
 | `POST_HOUR` | no | `1` | Initial cron hour; overridden by settings store |
 | `POST_MINUTE` | no | `0` | Initial cron minute |
 | `PORT` | no | `3000` | Express listen port |
+| `PUBLIC_URL` | no | — | Public base URL, no trailing slash. Required for `/calendar` to hand out a working subscribe link |
 | `MONGODB_URI` | no | — | When set, switches `store.js` to MongoDB |
 
 `config.js` reads all env vars into one exported object. `assertConfig()`
@@ -135,7 +136,9 @@ panel or by editing the file; both write the same store.
 
 `GET /feed.ics` — public, unauthenticated. Subscribe from Google Calendar
 ("Other calendars → From URL") or Apple Calendar ("File → New Calendar
-Subscription") to pull the recurring weekly classes directly.
+Subscription") to pull the recurring weekly classes directly. Students get
+this link by running `/calendar` in Discord, which requires `PUBLIC_URL` to
+be set.
 
 Generated fresh on every request from `src/ics.js`: a rolling 4-week window
 starting from the current week, one `VEVENT` per class occurrence, times
@@ -182,6 +185,7 @@ restart with no separate deploy script.
 |---|---|---|
 | `/schedule` | anyone | Ephemeral render of the current week |
 | `/publish` | anyone | Forces a fresh public post |
+| `/calendar` | anyone | Ephemeral subscribe link + Google/Apple setup steps. Requires `PUBLIC_URL`; without it, replies that the feed isn't configured |
 
 ## Rendering notes
 
