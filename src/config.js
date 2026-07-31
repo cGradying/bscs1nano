@@ -11,8 +11,11 @@ export const config = {
   postMinute: Number(process.env.POST_MINUTE ?? 0),
   port: Number(process.env.PORT ?? 3000),
   // Public base URL of this app, used to hand out the /feed.ics subscribe
-  // link. No trailing slash. Without it /calendar can't produce a usable URL.
-  publicUrl: (process.env.PUBLIC_URL || '').replace(/\/+$/, '') || null,
+  // link. No trailing slash. Render sets RENDER_EXTERNAL_URL automatically on
+  // web services, so this needs no manual config there. Without either,
+  // /calendar reports that the feed isn't configured.
+  publicUrl:
+    (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || '').replace(/\/+$/, '') || null,
   // Optional: when set, data persists in MongoDB Atlas (free tier) instead
   // of local JSON files. Needed on hosts (like Render's free tier) that
   // don't offer persistent disks at all.
