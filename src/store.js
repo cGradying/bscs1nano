@@ -28,10 +28,57 @@ function writeJsonFile(file, data) {
   fs.writeFileSync(file, JSON.stringify(data, null, 2));
 }
 
-// --- Mongo backend (used automatically when MONGODB_URI is set — this is
-// what lets data survive on hosts like Render's free tier, which has no
-// persistent disk at all). Falls back to local JSON files otherwise, which
-// is fine on any host with a real disk (a VM, Oracle Cloud, your own PC). ---
+// --- GitHub backend (used automatically when GITHUB_TOKEN + GITHUB_DATA_REPO
+// are set — durable, free, and diffable, one JSON file per doc committed to
+// a dedicated data repo). Checked first. Falls back to Mongo (MONGODB_URI —
+// also durable, needed on hosts with no persistent disk and no GitHub repo
+// configured), then to local JSON files, which is fine on any host with a
+// real disk (a VM, Oracle Cloud, your own PC). ---
+const GITHUB_API = 'https://api.github.com';
+const githubEnabled = () => Boolean(config.githubToken && config.githubRepo);
+
+async function githubRequest(method, path, body) {
+  const res = await fetch(`${GITHUB_API}${path}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${config.githubToken}`,
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'Content-Type': 'application/json',
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok && res.status !== 404) {
+    const text = await res.text();
+    const err = new Error(`GitHub API ${method} ${path} failed: ${res.status} ${text}`);
+    err.status = res.status;
+    throw err;
+  }
+  return res;
+}
+
+async function githubRead(key) {
+  const res = await githubRequest(
+    'GET',
+    `/repos/${config.githubRepo}/contents/${config.githubDir}/${key}.json?ref=${config.githubBranch}`
+  );
+  if (res.status === 404) return { data: null, sha: null };
+  const json = await res.json();
+  const decoded = Buffer.from(json.content, 'base64').toString('utf-8');
+  return { data: JSON.parse(decoded), sha: json.sha };
+}
+
+async function githubWrite(key, data, sha) {
+  if (sha === undefined) ({ sha } = await githubRead(key));
+  const content = Buffer.from(JSON.stringify(data, null, 2)).toString('base64');
+  await githubRequest('PUT', `/repos/${config.githubRepo}/contents/${config.githubDir}/${key}.json`, {
+    message: `Update ${key}.json — ${new Date().toISOString()}`,
+    content,
+    branch: config.githubBranch,
+    ...(sha ? { sha } : {}),
+  });
+}
+
 let dbPromise = null;
 function getDb() {
   if (!config.mongoUri) return null;
@@ -43,6 +90,10 @@ function getDb() {
 }
 
 async function readDoc(key, fallback) {
+  if (githubEnabled()) {
+    const { data } = await githubRead(key);
+    return data ?? fallback;
+  }
   const db = await getDb();
   if (db) {
     const doc = await db.collection('docs').findOne({ _id: key });
@@ -52,6 +103,10 @@ async function readDoc(key, fallback) {
 }
 
 async function writeDoc(key, data) {
+  if (githubEnabled()) {
+    await githubWrite(key, data);
+    return data;
+  }
   const db = await getDb();
   if (db) {
     await db.collection('docs').updateOne({ _id: key }, { $set: { data } }, { upsert: true });

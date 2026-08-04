@@ -36,10 +36,19 @@ publish.js → scheduleView.js → render.js → store.js
              (embed+buttons)   (PNG)      (persistence)
 ```
 
-`store.js` is the persistence abstraction. Backend is selected at runtime:
-MongoDB when `MONGODB_URI` is set, otherwise JSON files under `data/`. Every
-accessor is `async` regardless of backend. Never read `data/*.json` directly
-from another module — that bypasses the Mongo path.
+`store.js` is the persistence abstraction. Backend is selected at runtime,
+first match wins:
+
+1. **GitHub as a database** — `GITHUB_TOKEN` + `GITHUB_DATA_REPO` set. Each
+   doc (`schedule`, `overrides`, `events`, `settings`, `state`) is committed
+   as its own JSON file under `GITHUB_DATA_DIR` (default `data/`) in that
+   repo, via the Contents API. Point it at a repo that does **not** deploy
+   this bot — otherwise every save triggers a redeploy loop.
+2. **MongoDB** — `MONGODB_URI` set, used only if GitHub isn't configured.
+3. **Local JSON files** under `data/` — the fallback.
+
+Every accessor is `async` regardless of backend. Never read `data/*.json`
+directly from another module — that bypasses the GitHub/Mongo path.
 
 ### Data model
 
@@ -119,7 +128,11 @@ identified by their Monday (`weekKeyFor`). Use `now()`, not `dayjs()`, so
 | `POST_MINUTE` | no | `0` | Initial cron minute |
 | `PORT` | no | `3000` | Express listen port |
 | `PUBLIC_URL` | no | `RENDER_EXTERNAL_URL` | Public base URL, no trailing slash. Falls back to `RENDER_EXTERNAL_URL`, which Render sets automatically. `/calendar` needs one of the two |
-| `MONGODB_URI` | no | — | When set, switches `store.js` to MongoDB |
+| `GITHUB_TOKEN` | no | — | Classic token, `repo` scope. Enables the GitHub storage backend (checked first) |
+| `GITHUB_DATA_REPO` | no | — | `owner/repo`. Use a **separate** repo from this bot's code |
+| `GITHUB_DATA_BRANCH` | no | `main` | Branch to commit data to |
+| `GITHUB_DATA_DIR` | no | `data` | Directory in that repo holding `schedule.json`/`overrides.json`/etc |
+| `MONGODB_URI` | no | — | Used only if `GITHUB_TOKEN` is blank |
 
 `config.js` reads all env vars into one exported object. `assertConfig()`
 warns on missing values rather than exiting.
@@ -178,6 +191,7 @@ after it require a session; `/login` is declared before and is public.
 | `DELETE` | `/api/events/:id` | Remove an event |
 | `GET` | `/api/preview.png` | Render current week to PNG |
 | `GET`/`POST` | `/api/settings` | Daily post time |
+| `GET` | `/api/export` | Full-store dump — `{ schedule, overrides, state, settings, events }`, for backups or migrating between storage backends |
 | `POST` | `/api/publish` | Force a fresh post |
 
 Changing post time at runtime requires `rescheduleFromSettings()` after

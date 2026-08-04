@@ -10,7 +10,9 @@ import {
   setDayNote,
   getSettings,
   saveSettings,
+  getState,
   getEventsForDate,
+  getEvents,
   addEvent,
   removeEvent,
 } from '../store.js';
@@ -122,6 +124,20 @@ router.post('/api/events', async (req, res) => {
 router.delete('/api/events/:id', async (req, res) => {
   await removeEvent(req.params.id);
   res.json({ ok: true });
+});
+
+// Full-store dump — bulk backup/migration escape hatch, since every other
+// route is scoped to one date/doc. Reuses the same getters render.js and
+// the rest of the admin API already call; no new store.js code needed.
+router.get('/api/export', async (req, res) => {
+  const [schedule, overrides, state, settings, events] = await Promise.all([
+    getSchedule(),
+    getOverrides(),
+    getState(),
+    getSettings(),
+    getEvents(),
+  ]);
+  res.json({ schedule, overrides, state, settings, events });
 });
 
 router.get('/api/preview.png', async (req, res) => {

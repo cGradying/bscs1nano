@@ -20,6 +20,14 @@ export const config = {
   // of local JSON files. Needed on hosts (like Render's free tier) that
   // don't offer persistent disks at all.
   mongoUri: process.env.MONGODB_URI || null,
+  // GitHub-as-database — checked first if GITHUB_TOKEN + GITHUB_DATA_REPO
+  // are both set. Use a repo dedicated to data only, NOT this bot's own
+  // code repo, so saves don't trigger redeploys on hosts that auto-deploy
+  // on push. Same pattern/env var names as the resource-faq-bot.
+  githubToken: process.env.GITHUB_TOKEN || null,
+  githubRepo: process.env.GITHUB_DATA_REPO || null, // "owner/repo"
+  githubBranch: process.env.GITHUB_DATA_BRANCH || 'main',
+  githubDir: process.env.GITHUB_DATA_DIR || 'data', // one JSON file per doc, matching local layout
 };
 
 export function assertConfig() {
