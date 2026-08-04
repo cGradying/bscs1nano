@@ -47,7 +47,7 @@ from another module — that bypasses the Mongo path.
 |---|---|---|
 | Schedule | `data/schedule.json` | `{ section, dayStart, dayEnd, classes: { Mon..Sun: [] } }` |
 | Overrides | `data/overrides.json` | `{ "YYYY-MM-DD": { "<classId>": "vacant"\|"online", _note?: string } }` |
-| Events | `data/events.json` | keyed by exact `YYYY-MM-DD`, one-time only |
+| Events | `data/events.json` | flat array: `{ id, allDay, startDate, endDate, start?, end?, title, room, color? }`, one-time only |
 | Settings | `data/settings.json` | `{ postHour, postMinute }` |
 | State | `data/state.json` | `{ lastMessageId, lastMessageWeekKey }` |
 
@@ -60,7 +60,13 @@ to draw the "free time" bands; anything that should block a band must be
 pushed into the `busy` array.
 
 Recurring classes (`schedule.classes[Mon..Sun]`) repeat weekly forever.
-Events are separate and render only on their exact date.
+Events are separate and render only within `[startDate, endDate]`. Timed
+events (`allDay: false`) have `startDate === endDate` and required
+`start`/`end` hours, same as a class block. All-day events (`allDay: true`)
+have no `start`/`end` and render as a full-column highlight instead of a
+timed block — `startDate`/`endDate` can span multiple days. `eventOccursOn`
+in `store.js` is the one place that range check lives; reuse it rather than
+comparing dates inline.
 
 `_note` is a reserved key inside a day's override object — code iterating
 overrides must skip it.
@@ -143,12 +149,16 @@ The URL must be reachable from the public internet — Google fetches the feed
 from its own servers, so a `localhost` run cannot be subscribed to.
 
 Generated fresh on every request from `src/ics.js`: a rolling 4-week window
-starting from the current week, one `VEVENT` per class occurrence, times
-converted from local decimal hours to UTC (no `VTIMEZONE` block needed).
-Overrides (vacant/online), day notes, and one-time events are **not**
-reflected in this feed — it always shows the base recurring schedule.
-Calendar clients poll a subscribed feed roughly every 12-24h; this is not a
-push update.
+starting from the current week, one `VEVENT` per class occurrence plus one
+per one-time event overlapping the window, times converted from local
+decimal hours to UTC (no `VTIMEZONE` block needed). All-day events use
+`DTSTART;VALUE=DATE`/`DTEND;VALUE=DATE` (end date exclusive per RFC 5545).
+Overrides are reflected: a `vacant` class is omitted from the feed entirely;
+an `online` class still appears with `(Online)` appended to its `SUMMARY`.
+Day notes are still not reflected (no per-event equivalent in ICS). Calendar
+clients poll a subscribed feed roughly every 12-24h; this is not a push
+update, and events further out than the 4-week window won't appear until
+they roll into range.
 
 ## Admin HTTP API
 
@@ -164,8 +174,8 @@ after it require a session; `/login` is declared before and is public.
 | `DELETE` | `/api/classes/:day/:id` | Remove a class |
 | `GET`/`POST` | `/api/overrides` | Per-date vacant/online status |
 | `POST` | `/api/day-note` | Set a day's `_note` |
-| `GET`/`POST` | `/api/events` | One-time events |
-| `DELETE` | `/api/events/:date/:id` | Remove an event |
+| `GET`/`POST` | `/api/events` | One-time events (`?date=` for `GET`; body takes `allDay`, `startDate`, `endDate`, `start`/`end`, `title`, `room`, `color`) |
+| `DELETE` | `/api/events/:id` | Remove an event |
 | `GET` | `/api/preview.png` | Render current week to PNG |
 | `GET`/`POST` | `/api/settings` | Daily post time |
 | `POST` | `/api/publish` | Force a fresh post |

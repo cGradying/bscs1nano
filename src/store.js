@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { MongoClient } from 'mongodb';
 import { config } from './config.js';
 
@@ -162,37 +162,55 @@ export async function saveSettings(settings) {
   return merged;
 }
 
-// --- one-time events: { "YYYY-MM-DD": [ {id, start, end, title, room} ] }
+// --- one-time events: flat array, one entry per event.
+// { id, allDay, startDate, endDate, start?, end?, title, room, color? }
 // Unlike schedule.classes (which repeats every week on the same day-of-week
-// forever), these only ever show up on the exact date they're filed under —
-// e.g. a single seminar, an exam day, an orientation — then never again.
+// forever), these only ever show up within [startDate, endDate] — e.g. a
+// single seminar, an exam day, an orientation, a multi-day all-day event —
+// then never again. Timed events (allDay:false) have startDate===endDate
+// and required start/end decimal hours; all-day events span a date range
+// with no start/end.
+const DEFAULT_EVENTS = [];
+
 export async function getEvents() {
-  return readDoc('events', {});
+  return readDoc('events', DEFAULT_EVENTS);
 }
 
 export async function saveEvents(events) {
   return writeDoc('events', events);
 }
 
-export async function getEventsForDate(dateKey) {
-  const events = await getEvents();
-  return events[dateKey] || [];
+export function eventOccursOn(event, dateKey) {
+  return event.startDate <= dateKey && dateKey <= event.endDate;
 }
 
-export async function addEvent(dateKey, event) {
+export async function getEventsForDate(dateKey) {
   const events = await getEvents();
-  if (!events[dateKey]) events[dateKey] = [];
+  return events.filter((e) => eventOccursOn(e, dateKey));
+}
+
+export async function addEvent(event) {
+  const events = await getEvents();
   const id = 'e' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-  events[dateKey].push({ id, ...event });
+  events.push({ id, ...event });
   await saveEvents(events);
   return id;
 }
 
-export async function removeEvent(dateKey, eventId) {
+export async function removeEvent(eventId) {
   const events = await getEvents();
-  if (!events[dateKey]) return false;
-  events[dateKey] = events[dateKey].filter((e) => e.id !== eventId);
-  if (events[dateKey].length === 0) delete events[dateKey];
-  await saveEvents(events);
-  return true;
+  const next = events.filter((e) => e.id !== eventId);
+  await saveEvents(next);
+  return next.length !== events.length;
+}
+
+// Self-check: run directly with `node src/store.js`.
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const e = { startDate: '2026-03-10', endDate: '2026-03-12' };
+  console.assert(!eventOccursOn(e, '2026-03-09'), 'day before range should not occur');
+  console.assert(eventOccursOn(e, '2026-03-10'), 'start date should occur');
+  console.assert(eventOccursOn(e, '2026-03-11'), 'middle date should occur');
+  console.assert(eventOccursOn(e, '2026-03-12'), 'end date should occur');
+  console.assert(!eventOccursOn(e, '2026-03-13'), 'day after range should not occur');
+  console.log('ok - eventOccursOn boundary checks passed');
 }

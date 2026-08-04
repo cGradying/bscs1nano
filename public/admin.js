@@ -91,10 +91,16 @@ function render() {
         Only shows up on this exact date — unlike weekly classes, it never repeats.
       </p>
       <div id="eventList"></div>
-      <div class="add-form">
+      <div class="add-form" style="flex-wrap:wrap;">
+        <label style="display:flex; align-items:center; gap:4px; font-size:12px; color:var(--faint);">
+          <input type="checkbox" id="evAllDay" /> All day
+        </label>
         <input type="number" step="0.5" placeholder="Start" id="evStart" style="width:56px" />
         <input type="number" step="0.5" placeholder="End" id="evEnd" style="width:56px" />
+        <input type="date" id="evStartDate" style="display:none;" />
+        <input type="date" id="evEndDate" style="display:none;" />
         <input type="text" placeholder="Event title" id="evTitle" style="flex:1;" />
+        <input type="color" id="evColor" value="#c084fc" title="Event color" />
         <button id="addEventBtn">Add event</button>
       </div>
     </div>
@@ -146,12 +152,37 @@ function render() {
     toast('Note saved');
     refreshPreview();
   };
+  document.getElementById('evAllDay').onchange = (e) => {
+    const allDay = e.target.checked;
+    document.getElementById('evStart').style.display = allDay ? 'none' : '';
+    document.getElementById('evEnd').style.display = allDay ? 'none' : '';
+    document.getElementById('evStartDate').style.display = allDay ? '' : 'none';
+    document.getElementById('evEndDate').style.display = allDay ? '' : 'none';
+  };
+  document.getElementById('evStartDate').value = selectedDate;
+  document.getElementById('evEndDate').value = selectedDate;
   document.getElementById('addEventBtn').onclick = async () => {
-    const start = document.getElementById('evStart').value;
-    const end = document.getElementById('evEnd').value;
+    const allDay = document.getElementById('evAllDay').checked;
     const title = document.getElementById('evTitle').value;
-    if (!start || !end || !title) return toast('Fill start/end/title');
-    await api('/api/events', { method: 'POST', body: JSON.stringify({ date: selectedDate, start, end, title }) });
+    const color = document.getElementById('evColor').value;
+    if (!title) return toast('Fill title');
+    const body = { allDay, title, color };
+    if (allDay) {
+      const startDate = document.getElementById('evStartDate').value;
+      const endDate = document.getElementById('evEndDate').value;
+      if (!startDate || !endDate || endDate < startDate) return toast('Fix start/end date');
+      body.startDate = startDate;
+      body.endDate = endDate;
+    } else {
+      const start = document.getElementById('evStart').value;
+      const end = document.getElementById('evEnd').value;
+      if (!start || !end) return toast('Fill start/end');
+      body.startDate = selectedDate;
+      body.endDate = selectedDate;
+      body.start = start;
+      body.end = end;
+    }
+    await api('/api/events', { method: 'POST', body: JSON.stringify(body) });
     toast('Event added');
     await loadEventsFor(selectedDate);
     refreshPreview();
@@ -267,8 +298,8 @@ async function loadEventsFor(dateStr) {
   }
   list.innerHTML = events.map((e) => `
     <div class="class-row" data-id="${e.id}">
-      <strong>📌 ${escapeHtml(e.title)}</strong>
-      <span class="meta">${fmtHour(e.start)}–${fmtHour(e.end)}</span>
+      <strong style="color:${e.color || 'inherit'}">📌 ${escapeHtml(e.title)}</strong>
+      <span class="meta">${e.allDay ? (e.startDate === e.endDate ? 'All day' : `${e.startDate} → ${e.endDate}`) : `${fmtHour(e.start)}–${fmtHour(e.end)}`}</span>
       <div class="row-actions">
         <button class="danger delete">Delete</button>
       </div>
@@ -277,7 +308,7 @@ async function loadEventsFor(dateStr) {
   events.forEach((e) => {
     const row = list.querySelector(`[data-id="${e.id}"]`);
     row.querySelector('.delete').onclick = async () => {
-      await api(`/api/events/${dateStr}/${e.id}`, { method: 'DELETE' });
+      await api(`/api/events/${e.id}`, { method: 'DELETE' });
       toast('Event removed');
       await loadEventsFor(dateStr);
       refreshPreview();

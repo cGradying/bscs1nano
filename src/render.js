@@ -1,7 +1,7 @@
 import { createCanvas, GlobalFonts } from '@napi-rs/canvas';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { getSchedule, getOverrides, getEventsForDate } from './store.js';
+import { getSchedule, getOverrides, getEvents, eventOccursOn } from './store.js';
 import { DAY_KEYS, weekDatesFor, dateKey, now } from './dates.js';
 
 // Bundle our own font instead of relying on whatever (if anything) is
@@ -58,6 +58,15 @@ function fmtHour(h) {
   let dh = hour % 12;
   if (dh === 0) dh = 12;
   return dh + (min ? ':' + String(min).padStart(2, '0') : '') + period;
+}
+
+function hexToRgba(hex, alpha) {
+  const h = hex.replace('#', '');
+  const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
 }
 
 function roundRect(ctx, x, y, w, h, r) {
@@ -157,6 +166,7 @@ export async function renderWeekImage(targetDate) {
   legendItem(COLORS.onlineFill, 'Online');
   legendItem(COLORS.vacantFill, 'Vacant / no class');
   legendItem(COLORS.eventFill, 'One-time event');
+  legendItem(COLORS.eventFill, 'All-day event');
   legendItem(COLORS.goldFill, 'Free — good time to post');
 
   // grid top
@@ -208,7 +218,7 @@ export async function renderWeekImage(targetDate) {
   }
 
   // per-day columns: free bands + class blocks
-  const eventsByDate = await Promise.all(weekDates.map((d) => getEventsForDate(dateKey(d))));
+  const allEvents = await getEvents();
 
   DAY_KEYS.forEach((dayKey, i) => {
     const x = gridLeft + i * COL_WIDTH;
@@ -219,7 +229,9 @@ export async function renderWeekImage(targetDate) {
       ...c,
       status: dayOverrides[c.id] || 'scheduled',
     }));
-    const events = eventsByDate[i] || [];
+    const dayEvents = allEvents.filter((e) => eventOccursOn(e, dKey));
+    const events = dayEvents.filter((e) => !e.allDay);
+    const allDayEvents = dayEvents.filter((e) => e.allDay);
 
     // vertical column divider
     ctx.strokeStyle = COLORS.gridLine;
@@ -298,19 +310,36 @@ export async function renderWeekImage(targetDate) {
     events.forEach((e) => {
       const y = bodyTop + (e.start - dayStart) * PX_PER_HOUR;
       const h = (e.end - e.start) * PX_PER_HOUR;
+      const border = e.color || COLORS.event;
       roundRect(ctx, x + 3, y + 1, COL_WIDTH - 6, Math.max(h - 2, 10), 5);
-      ctx.fillStyle = COLORS.eventFill;
+      ctx.fillStyle = hexToRgba(border, 0.2);
       ctx.fill();
-      ctx.strokeStyle = COLORS.event;
+      ctx.strokeStyle = border;
       ctx.lineWidth = 1;
       ctx.stroke();
 
-      ctx.fillStyle = COLORS.event;
+      ctx.fillStyle = border;
       ctx.font = `10.5px ${FONT_BOLD}`;
       ctx.fillText('📌 EVENT', x + 8, y + 5);
       ctx.fillStyle = COLORS.textDim;
       ctx.font = `9px ${FONT}`;
       wrapText(ctx, e.title, x + 8, y + 18, COL_WIDTH - 16, 11);
+    });
+
+    // all-day events: full-column highlight, layered on top so it's
+    // unmistakable regardless of what else is scheduled that day
+    allDayEvents.forEach((e, idx) => {
+      const border = e.color || COLORS.event;
+      ctx.fillStyle = hexToRgba(border, 0.22);
+      ctx.fillRect(x, bodyTop, COL_WIDTH, colHeight);
+      ctx.strokeStyle = border;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x + 0.5, bodyTop + 0.5, COL_WIDTH - 1, colHeight - 1);
+      ctx.fillStyle = border;
+      ctx.font = `10.5px ${FONT_BOLD}`;
+      ctx.textAlign = 'center';
+      ctx.fillText('📌 ' + e.title, x + COL_WIDTH / 2, bodyTop + 6 + idx * 14);
+      ctx.textAlign = 'left';
     });
   });
 

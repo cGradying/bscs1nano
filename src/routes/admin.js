@@ -106,13 +106,21 @@ router.get('/api/events', async (req, res) => {
 });
 
 router.post('/api/events', async (req, res) => {
-  const { date, start, end, title, room } = req.body;
-  const id = await addEvent(date, { start: Number(start), end: Number(end), title, room: room || '' });
+  const { allDay, startDate, endDate, start, end, title, room, color } = req.body;
+  if (!startDate || !title) return res.status(400).json({ error: 'startDate and title are required' });
+  if (color && !/^#[0-9a-fA-F]{6}$/.test(color)) return res.status(400).json({ error: 'invalid color' });
+  const event = { allDay: !!allDay, startDate, endDate: endDate || startDate, title, room: room || '' };
+  if (color) event.color = color;
+  if (!event.allDay) {
+    event.start = Number(start);
+    event.end = Number(end);
+  }
+  const id = await addEvent(event);
   res.json({ id });
 });
 
-router.delete('/api/events/:date/:id', async (req, res) => {
-  await removeEvent(req.params.date, req.params.id);
+router.delete('/api/events/:id', async (req, res) => {
+  await removeEvent(req.params.id);
   res.json({ ok: true });
 });
 
