@@ -1,7 +1,7 @@
 import { pathToFileURL } from 'url';
 import { now, weekDatesFor, dateKey, dateFromKey, DAY_KEYS } from './dates.js';
 
-const NUM_WEEKS = 4;
+const NUM_WEEKS = 8; // ~2 months, enough runway for subscribers to see upcoming all-day/academic-calendar events without the feed staying tiny
 
 // Decimal hour (13.5) -> that same local dayjs day at that time.
 function atHour(dayjsDate, decimalHour) {

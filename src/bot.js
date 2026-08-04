@@ -31,9 +31,9 @@ function buildCalendarReply() {
     '1. Mac: **File** → **New Calendar Subscription**',
     '2. Paste the link above → **Subscribe**',
     '',
-    'It shows the next 4 weeks of classes and refreshes on its own. Calendar apps ' +
-      'check for updates every 12-24 hours, so a schedule change may take a while to appear. ' +
-      'Day-to-day changes (vacant/online, one-time events) are not included — watch the channel for those.',
+    'It shows the next ~2 months of classes and events, and refreshes on its own. ' +
+      'Calendar apps check for updates every 12-24 hours, so a change may take a while to appear. ' +
+      'Vacant/online overrides and one-time/all-day events are reflected too.',
   ].join('\n');
 }
 

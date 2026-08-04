@@ -161,7 +161,7 @@ this link by running `/calendar` in Discord.
 The URL must be reachable from the public internet — Google fetches the feed
 from its own servers, so a `localhost` run cannot be subscribed to.
 
-Generated fresh on every request from `src/ics.js`: a rolling 4-week window
+Generated fresh on every request from `src/ics.js`: a rolling 8-week (~2 month) window
 starting from the current week, one `VEVENT` per class occurrence plus one
 per one-time event overlapping the window, times converted from local
 decimal hours to UTC (no `VTIMEZONE` block needed). All-day events use
@@ -170,7 +170,7 @@ Overrides are reflected: a `vacant` class is omitted from the feed entirely;
 an `online` class still appears with `(Online)` appended to its `SUMMARY`.
 Day notes are still not reflected (no per-event equivalent in ICS). Calendar
 clients poll a subscribed feed roughly every 12-24h; this is not a push
-update, and events further out than the 4-week window won't appear until
+update, and events further out than the 8-week window won't appear until
 they roll into range.
 
 ## Admin HTTP API
