@@ -32,8 +32,8 @@ function requireAuth(req, res, next) {
   return res.redirect('/login');
 }
 
-router.get('/login', (req, res) => {
-  res.type('html').send(loginPage(req.query.error));
+router.get('/login', async (req, res) => {
+  res.type('html').send(await loginPage(req.query.error));
 });
 
 router.post('/login', express.urlencoded({ extended: false }), (req, res) => {
@@ -185,24 +185,74 @@ router.post('/api/publish', async (req, res) => {
   }
 });
 
-function loginPage(error) {
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Admin login</title>
-  <link rel="stylesheet" href="/admin.css"></head>
-  <body class="login-body">
-    <form class="login-card" method="post" action="/login">
-      <h1>Schedule Admin</h1>
-      ${error ? '<p class="error">Wrong password.</p>' : ''}
-      <input type="password" name="password" placeholder="Admin password" autofocus required />
-      <button type="submit">Log in</button>
-    </form>
+// Shared <head> — favicon (data-URI SVG, matches the 📅 used throughout the
+// UI, no image asset needed) + the Space Grotesk/Inter/JetBrains Mono
+// stack. One place so both page shells stay in sync.
+const FAVICON = `data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">📅</text></svg>'
+)}`;
+const FONT_LINKS = `
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+`;
+function pageHead(title) {
+  return `<meta charset="utf-8"><title>${title}</title>
+  <link rel="icon" href="${FAVICON}">
+  ${FONT_LINKS}
+  <link rel="stylesheet" href="/admin.css">`;
+}
+
+// Async so it can pull the real section name straight from the store —
+// this is the app's landing page as much as its login screen, so it
+// should say whose schedule it's guarding rather than a generic title.
+async function loginPage(error) {
+  const schedule = await getSchedule();
+  // Ghost timetable grid behind the section name — the login page's one
+  // signature element, echoing the actual weekly grid render.js draws.
+  // Mon=0..Sun=6, matching DAY_KEYS elsewhere; dayjs().day() is 0=Sun..6=Sat.
+  const dow = now().day();
+  const todayCol = dow === 0 ? 6 : dow - 1;
+  const colW = 420 / 7;
+
+  return `<!DOCTYPE html><html><head>${pageHead('Log in')}</head>
+  <body>
+    <div class="login-page">
+      <div class="brand-panel">
+        <svg class="grid-ghost" viewBox="0 0 420 460" preserveAspectRatio="none">
+          <rect x="${todayCol * colW}" y="0" width="${colW}" height="460" fill="var(--gold)" opacity="0.05"/>
+          <g stroke="var(--line)" stroke-width="1">
+            ${Array.from({ length: 8 }, (_, i) => `<line x1="${i * colW}" y1="0" x2="${i * colW}" y2="460"/>`).join('')}
+            ${Array.from({ length: 11 }, (_, i) => `<line x1="0" y1="${40 + i * 40}" x2="420" y2="${40 + i * 40}"/>`).join('')}
+          </g>
+        </svg>
+        <div class="brand-content">
+          <p class="brand-eyebrow">Schedule Admin</p>
+          <h1 class="brand-title">📅 ${escapeHtml(schedule.section.name)}</h1>
+          <p class="brand-tagline">Weekly classes, exceptions, and Discord posts — all from one place.</p>
+        </div>
+      </div>
+      <div class="form-panel">
+        <form class="login-card" method="post" action="/login">
+          <h2>Log in</h2>
+          <p class="sub">Enter the admin password to continue.</p>
+          ${error ? '<p class="error">Wrong password.</p>' : ''}
+          <input type="password" name="password" placeholder="Admin password" autofocus required />
+          <button type="submit">Log in</button>
+        </form>
+      </div>
+    </div>
   </body></html>`;
 }
 
 function dashboardPage() {
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Schedule Admin</title>
-  <link rel="stylesheet" href="/admin.css"></head>
+  return `<!DOCTYPE html><html><head>${pageHead('Schedule Admin')}</head>
   <body>
-    <div id="app">Loading…</div>
+    <div id="app"><p class="loading-state">Loading…</p></div>
     <script src="/admin.js"></script>
   </body></html>`;
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }

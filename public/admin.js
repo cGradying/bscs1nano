@@ -55,7 +55,7 @@ function render() {
   app.innerHTML = `
     <div class="topbar">
       <h1>📅 ${escapeHtml(schedule.section.name)} — Schedule Admin</h1>
-      <div style="display:flex; gap:8px;">
+      <div class="actions-row">
         <button class="pill-btn" id="logoutBtn">Log out</button>
         <button class="pill-btn primary" id="publishBtn">Publish now</button>
       </div>
@@ -63,7 +63,7 @@ function render() {
 
     <div class="card">
       <h2>Daily auto-post time</h2>
-      <p style="color:var(--faint); font-size:12px; margin:-4px 0 10px;">
+      <p class="hint-text">
         What time the schedule gets posted automatically every day. Takes effect immediately — no redeploy needed.
       </p>
       <div class="add-form">
@@ -88,7 +88,7 @@ function render() {
 
     <div class="card">
       <h2>Today / specific date — overrides</h2>
-      <p style="color:var(--faint); font-size:12px; margin:-4px 0 10px;">
+      <p class="hint-text">
         Status, time and meeting link here only apply to this one date — the weekly schedule above is untouched.
       </p>
       <div class="override-controls">
@@ -96,24 +96,24 @@ function render() {
       </div>
       <div id="overrideList"></div>
       <textarea class="day-note" id="dayNote" placeholder="Optional note for this day (e.g. 'Suspended — no classes')"></textarea>
-      <div style="margin-top:8px;"><button class="pill-btn primary" id="saveNoteBtn">Save note</button></div>
+      <div class="save-note-row"><button class="pill-btn primary" id="saveNoteBtn">Save note</button></div>
     </div>
 
     <div class="card">
       <h2>One-time events for ${selectedDate}</h2>
-      <p style="color:var(--faint); font-size:12px; margin:-4px 0 10px;">
+      <p class="hint-text">
         Only shows up on this exact date — unlike weekly classes, it never repeats.
       </p>
       <div id="eventList"></div>
-      <div class="add-form" style="flex-wrap:wrap;">
-        <label style="display:flex; align-items:center; gap:4px; font-size:12px; color:var(--faint);">
+      <div class="add-form">
+        <label class="checkbox-label">
           <input type="checkbox" id="evAllDay" /> All day
         </label>
-        <input type="number" step="0.5" placeholder="Start" id="evStart" style="width:56px" />
-        <input type="number" step="0.5" placeholder="End" id="evEnd" style="width:56px" />
+        <input type="number" step="0.5" placeholder="Start" id="evStart" class="w-sm" />
+        <input type="number" step="0.5" placeholder="End" id="evEnd" class="w-sm" />
         <input type="date" id="evStartDate" style="display:none;" />
         <input type="date" id="evEndDate" style="display:none;" />
-        <input type="text" placeholder="Event title" id="evTitle" style="flex:1;" />
+        <input type="text" placeholder="Event title" id="evTitle" />
         <input type="color" id="evColor" value="#c084fc" title="Event color" />
         <button id="addEventBtn">Add event</button>
       </div>
@@ -215,7 +215,7 @@ function renderOnboarding() {
     <div class="onboarding">
       <div class="onboarding-head">
         <h1>👋 Welcome — let's set up your schedule</h1>
-        <p style="color:var(--faint); font-size:13px;">
+        <p class="hint-text">
           This only shows up once, on a fresh deployment. Fill in your section and add your weekly classes below, then finish setup.
         </p>
       </div>
@@ -230,7 +230,7 @@ function renderOnboarding() {
 
       <div class="card">
         <h2>Step 2 — Weekly classes</h2>
-        <p style="color:var(--faint); font-size:12px; margin:-4px 0 10px;">
+        <p class="hint-text">
           Add each recurring class block below, per day. You can always edit these later from the dashboard.
         </p>
         <div class="day-grid" id="dayGrid"></div>
@@ -322,10 +322,10 @@ function renderClassRowView(row, day, c) {
 function renderClassRowEdit(row, day, c) {
   row.innerHTML = `
     <div class="add-form">
-      <input type="number" step="0.5" class="edit-start" value="${c.start}" style="width:56px" />
-      <input type="number" step="0.5" class="edit-end" value="${c.end}" style="width:56px" />
-      <input type="text" class="edit-code" value="${escapeHtml(c.code)}" style="width:90px" />
-      <input type="text" class="edit-title" value="${escapeHtml(c.title)}" style="flex:1; min-width:100px;" />
+      <input type="number" step="0.5" class="edit-start w-sm" value="${c.start}" />
+      <input type="number" step="0.5" class="edit-end w-sm" value="${c.end}" />
+      <input type="text" class="edit-code w-md" value="${escapeHtml(c.code)}" />
+      <input type="text" class="edit-title" value="${escapeHtml(c.title)}" />
       <button class="edit-save">Save</button>
       <button type="button" class="edit-cancel">Cancel</button>
     </div>
@@ -353,7 +353,7 @@ async function loadOverridesFor(dateStr) {
   const classes = schedule.classes[dayKey] || [];
 
   if (!classes.length) {
-    list.innerHTML = `<p style="color:var(--faint); font-size:13px;">No recurring classes on ${DAY_NAMES[dayKey]}s.</p>`;
+    list.innerHTML = `<p class="empty-state">No recurring classes on ${DAY_NAMES[dayKey]}s.</p>`;
     document.getElementById('dayNote').value = overrides._note || '';
     return;
   }
@@ -366,7 +366,7 @@ async function loadOverridesFor(dateStr) {
     return `
       <div class="override-row" data-id="${c.id}">
         <div class="override-row-head">
-          <span>${escapeHtml(c.code)} — ${escapeHtml(c.title)} <span class="meta">(normally ${fmtHour(c.start)}–${fmtHour(c.end)})</span></span>
+          <span><strong>${escapeHtml(c.code)}</strong> — ${escapeHtml(c.title)} <span class="meta">(normally ${fmtHour(c.start)}–${fmtHour(c.end)})</span></span>
           <select class="status-select">
             <option value="none">Scheduled as normal</option>
             <option value="online">Moved online</option>
@@ -456,7 +456,7 @@ async function loadEventsFor(dateStr) {
   const events = await api(`/api/events?date=${dateStr}`);
   const list = document.getElementById('eventList');
   if (!events.length) {
-    list.innerHTML = `<p style="color:var(--faint); font-size:13px;">No one-time events on ${dateStr}.</p>`;
+    list.innerHTML = `<p class="empty-state">No one-time events on ${dateStr}.</p>`;
     return;
   }
   list.innerHTML = events.map((e) => `
