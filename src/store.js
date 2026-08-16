@@ -131,7 +131,7 @@ export async function saveSchedule(schedule) {
   return writeDoc('schedule', schedule);
 }
 
-// overrides: { "YYYY-MM-DD": { "<classId>": "vacant" | "online", "_note": "string" } }
+// overrides: { "YYYY-MM-DD": { "<classId>": "vacant" | "online", "_note"?: "string", "_links"?: { "<classId>": "url" } } }
 export async function getOverrides() {
   return readDoc('overrides', {});
 }
@@ -161,6 +161,23 @@ export async function setDayNote(dateKey, note) {
   } else {
     delete overrides[dateKey]._note;
     if (Object.keys(overrides[dateKey]).length === 0) delete overrides[dateKey];
+  }
+  await saveOverrides(overrides);
+  return overrides;
+}
+
+export async function setClassLink(dateKey, classId, url) {
+  const overrides = await getOverrides();
+  if (!overrides[dateKey]) overrides[dateKey] = {};
+  if (!overrides[dateKey]._links) overrides[dateKey]._links = {};
+  if (url) {
+    overrides[dateKey]._links[classId] = url;
+  } else {
+    delete overrides[dateKey]._links[classId];
+    if (Object.keys(overrides[dateKey]._links).length === 0) {
+      delete overrides[dateKey]._links;
+      if (Object.keys(overrides[dateKey]).length === 0) delete overrides[dateKey];
+    }
   }
   await saveOverrides(overrides);
   return overrides;
