@@ -331,15 +331,18 @@ export async function renderWeekImage(targetDate) {
       wrapText(ctx, e.title, x + 8, y + 18, COL_WIDTH - 16, 11);
     });
 
-    // all-day events: a light wash with top/bottom accent lines only (no
-    // per-day box) so a multi-day event like "Adjustment Period" reads as
-    // one continuous band across the week instead of separate boxed tiles,
-    // and stays faint enough that classes underneath are still legible.
-    allDayEvents.forEach((e, idx) => {
-      const border = e.color || COLORS.event;
-      ctx.fillStyle = hexToRgba(border, 0.09);
+    // all-day events: one light wash + accent lines per DAY (not per event —
+    // stacking a second event's fill on top used to double the tint and make
+    // busier days look heavier than quiet ones for no reason). Each event
+    // gets its own color-coded row instead of a repeated 📌 on every line,
+    // and a small count badge appears when 2+ events overlap the same day
+    // so that's obvious at a glance instead of two titles just crowding
+    // each other.
+    if (allDayEvents.length > 0) {
+      const primary = allDayEvents[0].color || COLORS.event;
+      ctx.fillStyle = hexToRgba(primary, 0.09);
       ctx.fillRect(x, bodyTop, COL_WIDTH, colHeight);
-      ctx.strokeStyle = hexToRgba(border, 0.55);
+      ctx.strokeStyle = hexToRgba(primary, 0.55);
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.moveTo(x, bodyTop + 0.5);
@@ -347,13 +350,54 @@ export async function renderWeekImage(targetDate) {
       ctx.moveTo(x, bodyTop + colHeight - 0.5);
       ctx.lineTo(x + COL_WIDTH, bodyTop + colHeight - 0.5);
       ctx.stroke();
-      ctx.fillStyle = border;
-      ctx.font = `10.5px ${FONT_BOLD}`;
-      ctx.textAlign = 'center';
-      ctx.fillText('📌 ' + e.title, x + COL_WIDTH / 2, bodyTop + 6 + idx * 14);
-      ctx.textAlign = 'left';
-    });
+
+      // Free-time labels for a window starting right at dayStart land at
+      // bodyTop+3 (render below); give the event rows enough clearance
+      // below that so the two never collide.
+      const rowH = 13;
+      const rowsTop = bodyTop + 18;
+      allDayEvents.forEach((e, idx) => {
+        const rowColor = e.color || COLORS.event;
+        const rowY = rowsTop + idx * rowH;
+        // color-coded dot instead of a repeated pin emoji per row
+        ctx.fillStyle = rowColor;
+        ctx.beginPath();
+        ctx.arc(x + 10, rowY - 2, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.font = `10px ${FONT_BOLD}`;
+        ctx.textAlign = 'left';
+        ctx.fillText(truncateText(ctx, e.title, COL_WIDTH - 34), x + 17, rowY);
+      });
+
+      if (allDayEvents.length > 1) {
+        // small count badge — the "there's more than one thing here" tell
+        const badgeR = 8;
+        const bx = x + COL_WIDTH - badgeR - 4;
+        const by = rowsTop - 5;
+        ctx.fillStyle = COLORS.bgSoft;
+        ctx.beginPath();
+        ctx.arc(bx, by, badgeR, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = primary;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.fillStyle = primary;
+        ctx.font = `9px ${FONT_BOLD}`;
+        ctx.textAlign = 'center';
+        ctx.fillText(String(allDayEvents.length), bx, by + 3);
+        ctx.textAlign = 'left';
+      }
+    }
   });
+
+  function truncateText(ctx, text, maxWidth) {
+    if (ctx.measureText(text).width <= maxWidth) return text;
+    let out = text;
+    while (out.length > 1 && ctx.measureText(out + '…').width > maxWidth) {
+      out = out.slice(0, -1);
+    }
+    return out + '…';
+  }
 
   function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
     const words = text.split(' ');
