@@ -115,8 +115,8 @@ router.post('/api/class-time', async (req, res) => {
   const overrides = await setClassTime(
     date,
     classId,
-    start !== undefined ? Number(start) : null,
-    end !== undefined ? Number(end) : null
+    start != null ? Number(start) : null,
+    end != null ? Number(end) : null
   );
   res.json(overrides[date] || {});
 });
