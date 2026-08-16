@@ -1,5 +1,9 @@
 #!/usr/bin/env node
-import { setClassLink, setOverrideForDate, setDayNote } from '../src/store.js';
+import dayjs from 'dayjs';
+import customParseFormat from 'dayjs/plugin/customParseFormat.js';
+import { setClassLink, setOverrideForDate, setDayNote, setClassTime } from '../src/store.js';
+
+dayjs.extend(customParseFormat);
 
 // Minimal argv parsing: node update-schedule.js <command> --flag value ...
 const command = process.argv[2];
@@ -10,6 +14,19 @@ for (let i = 3; i < process.argv.length; i += 2) {
   if (key && value !== undefined) {
     args[key] = value;
   }
+}
+
+// Schedule times are decimal hours (13.5 = 1:30 PM). Accept that directly,
+// or a clock string ("1:30 PM", "13:30") for whoever/whatever is typing
+// a time straight out of an email.
+const TIME_FORMATS = ['h:mm A', 'h:mmA', 'hA', 'h A', 'H:mm', 'HH:mm'];
+function parseTime(str) {
+  if (/^\d+(\.\d+)?$/.test(str)) return Number(str);
+  for (const fmt of TIME_FORMATS) {
+    const d = dayjs(str, fmt, true);
+    if (d.isValid()) return d.hour() + d.minute() / 60;
+  }
+  throw new Error(`Could not parse time "${str}" — use a decimal hour (13.5) or a clock string ("1:30 PM")`);
 }
 
 async function run() {
@@ -38,9 +55,17 @@ async function run() {
       }
       const result = await setDayNote(date, note);
       console.log(JSON.stringify(result[date] || {}, null, 2));
+    } else if (command === 'time') {
+      const { date, class: classId, start, end } = args;
+      if (!date || !classId || !start || !end) {
+        console.error('Usage: node update-schedule.js time --date YYYY-MM-DD --class <id> --start "1:30 PM" --end "3:30 PM"');
+        process.exit(1);
+      }
+      const result = await setClassTime(date, classId, parseTime(start), parseTime(end));
+      console.log(JSON.stringify(result[date] || {}, null, 2));
     } else {
       console.error('Unknown command:', command);
-      console.error('Available: link, override, note');
+      console.error('Available: link, override, note, time');
       process.exit(1);
     }
   } catch (err) {

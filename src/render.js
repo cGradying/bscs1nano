@@ -225,10 +225,15 @@ export async function renderWeekImage(targetDate) {
     const d = weekDates[i];
     const dKey = dateKey(d);
     const dayOverrides = overrides[dKey] || {};
-    const classes = (schedule.classes[dayKey] || []).map((c) => ({
-      ...c,
-      status: dayOverrides[c.id] || 'scheduled',
-    }));
+    const classes = (schedule.classes[dayKey] || []).map((c) => {
+      const timeOverride = dayOverrides._times?.[c.id];
+      return {
+        ...c,
+        start: timeOverride?.start ?? c.start,
+        end: timeOverride?.end ?? c.end,
+        status: dayOverrides[c.id] || 'scheduled',
+      };
+    });
     const dayEvents = allEvents.filter((e) => eventOccursOn(e, dKey));
     const events = dayEvents.filter((e) => !e.allDay);
     const allDayEvents = dayEvents.filter((e) => e.allDay);

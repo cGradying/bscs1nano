@@ -9,6 +9,7 @@ import {
   setOverrideForDate,
   setDayNote,
   setClassLink,
+  setClassTime,
   getSettings,
   saveSettings,
   getState,
@@ -106,6 +107,17 @@ router.post('/api/day-note', async (req, res) => {
 router.post('/api/links', async (req, res) => {
   const { date, classId, link } = req.body;
   const overrides = await setClassLink(date, classId, link || null);
+  res.json(overrides[date] || {});
+});
+
+router.post('/api/class-time', async (req, res) => {
+  const { date, classId, start, end } = req.body;
+  const overrides = await setClassTime(
+    date,
+    classId,
+    start !== undefined ? Number(start) : null,
+    end !== undefined ? Number(end) : null
+  );
   res.json(overrides[date] || {});
 });
 

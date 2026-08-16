@@ -131,7 +131,7 @@ export async function saveSchedule(schedule) {
   return writeDoc('schedule', schedule);
 }
 
-// overrides: { "YYYY-MM-DD": { "<classId>": "vacant" | "online", "_note"?: "string", "_links"?: { "<classId>": "url" } } }
+// overrides: { "YYYY-MM-DD": { "<classId>": "vacant" | "online", "_note"?: "string", "_links"?: { "<classId>": "url" }, "_times"?: { "<classId>": { start, end } } } }
 export async function getOverrides() {
   return readDoc('overrides', {});
 }
@@ -176,6 +176,23 @@ export async function setClassLink(dateKey, classId, url) {
     delete overrides[dateKey]._links[classId];
     if (Object.keys(overrides[dateKey]._links).length === 0) {
       delete overrides[dateKey]._links;
+      if (Object.keys(overrides[dateKey]).length === 0) delete overrides[dateKey];
+    }
+  }
+  await saveOverrides(overrides);
+  return overrides;
+}
+
+export async function setClassTime(dateKey, classId, start, end) {
+  const overrides = await getOverrides();
+  if (!overrides[dateKey]) overrides[dateKey] = {};
+  if (!overrides[dateKey]._times) overrides[dateKey]._times = {};
+  if (start != null && end != null) {
+    overrides[dateKey]._times[classId] = { start, end };
+  } else {
+    delete overrides[dateKey]._times[classId];
+    if (Object.keys(overrides[dateKey]._times).length === 0) {
+      delete overrides[dateKey]._times;
       if (Object.keys(overrides[dateKey]).length === 0) delete overrides[dateKey];
     }
   }

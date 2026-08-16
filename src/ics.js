@@ -65,13 +65,16 @@ export function buildIcsFeed(schedule, overrides = {}, events = []) {
       for (const cls of classes) {
         const status = dayOverrides[cls.id];
         if (status === 'vacant') continue;
+        const timeOverride = dayOverrides._times?.[cls.id];
+        const start = timeOverride?.start ?? cls.start;
+        const end = timeOverride?.end ?? cls.end;
         const summary = `${cls.code} ${cls.title}`.trim() + (status === 'online' ? ' (Online)' : '');
         lines.push(
           'BEGIN:VEVENT',
           `UID:${cls.id}-${dateKey(date)}@schedule-bot`,
           `DTSTAMP:${stamp}`,
-          `DTSTART:${toUtcStamp(atHour(date, cls.start))}`,
-          `DTEND:${toUtcStamp(atHour(date, cls.end))}`,
+          `DTSTART:${toUtcStamp(atHour(date, start))}`,
+          `DTEND:${toUtcStamp(atHour(date, end))}`,
           `SUMMARY:${escapeText(summary)}`,
           ...(cls.room ? [`LOCATION:${escapeText(cls.room)}`] : []),
           'END:VEVENT'
@@ -148,6 +151,16 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const withOverrides = buildIcsFeed(fake, overrides);
   console.assert(!withOverrides.includes(`UID:x1-${monday}@`), 'vacant class should be omitted');
   console.assert(withOverrides.includes('(Online)'), 'online class should be marked (Online)');
+
+  // x2 normally starts at 9h (01:00Z); override it to 10.5h (02:30Z) for this one date only.
+  const withTimeOverride = buildIcsFeed(fake, { [monday]: { _times: { x2: { start: 10.5, end: 12 } } } });
+  const overrideLines = withTimeOverride.split('\r\n');
+  const x2Idx = overrideLines.findIndex((l) => l === `UID:x2-${monday}@schedule-bot`);
+  console.assert(x2Idx !== -1, 'time-overridden occurrence missing from feed');
+  console.assert(
+    overrideLines[x2Idx + 2].endsWith('T023000Z'),
+    `time-overridden occurrence should start at 02:30Z, got: ${overrideLines[x2Idx + 2]}`
+  );
 
   const timedEvent = { id: 'e1', allDay: false, startDate: monday, endDate: monday, start: 8, end: 9, title: 'Orientation', room: '' };
   const allDayEvent = { id: 'e2', allDay: true, startDate: monday, endDate: monday, title: 'Exam Day', room: '' };

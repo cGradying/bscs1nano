@@ -55,7 +55,7 @@ directly from another module — that bypasses the GitHub/Mongo path.
 | Store | File | Shape |
 |---|---|---|
 | Schedule | `data/schedule.json` | `{ section, dayStart, dayEnd, classes: { Mon..Sun: [] } }` |
-| Overrides | `data/overrides.json` | `{ "YYYY-MM-DD": { "<classId>": "vacant"\|"online", _note?: string, _links?: { "<classId>": url } } }` |
+| Overrides | `data/overrides.json` | `{ "YYYY-MM-DD": { "<classId>": "vacant"\|"online", _note?: string, _links?: { "<classId>": url }, _times?: { "<classId>": { start, end } } } }` |
 | Events | `data/events.json` | flat array: `{ id, allDay, startDate, endDate, start?, end?, title, room, color? }`, one-time only |
 | Settings | `data/settings.json` | `{ postHour, postMinute }` |
 | State | `data/state.json` | `{ lastMessageId, lastMessageWeekKey }` |
@@ -77,10 +77,14 @@ timed block — `startDate`/`endDate` can span multiple days. `eventOccursOn`
 in `store.js` is the one place that range check lives; reuse it rather than
 comparing dates inline.
 
-`_note` and `_links` are reserved keys inside a day's override object —
-code iterating overrides must skip them. `_links` is an object mapping
-`classId` to meeting URLs (e.g. Zoom, Google Meet); these appear in the
-Discord embed's "Online Links" field.
+`_note`, `_links` and `_times` are reserved keys inside a day's override
+object — code iterating overrides must skip them. `_links` maps `classId`
+to meeting URLs (e.g. Zoom, Google Meet), shown in the Discord embed's
+"Online Links" field. `_times` maps `classId` to a one-off `{ start, end }`
+(decimal hours) that overrides the recurring class's time for that single
+date only — used by `render.js` (repositions the block, recomputes the
+free-time bands around it) and `ics.js` (that occurrence's `DTSTART`/`DTEND`
+in the calendar feed).
 
 ### Post semantics
 
@@ -190,6 +194,7 @@ after it require a session; `/login` is declared before and is public.
 | `GET`/`POST` | `/api/overrides` | Per-date vacant/online status |
 | `POST` | `/api/day-note` | Set a day's `_note` |
 | `POST` | `/api/links` | Attach a meeting link to a class on a specific date; body: `{ date, classId, link }` |
+| `POST` | `/api/class-time` | Shift a class's start/end time for one date only; body: `{ date, classId, start, end }` (decimal hours) |
 | `GET`/`POST` | `/api/events` | One-time events (`?date=` for `GET`; body takes `allDay`, `startDate`, `endDate`, `start`/`end`, `title`, `room`, `color`) |
 | `DELETE` | `/api/events/:id` | Remove an event |
 | `GET` | `/api/preview.png` | Render current week to PNG |
