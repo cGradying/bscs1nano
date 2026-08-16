@@ -326,15 +326,22 @@ export async function renderWeekImage(targetDate) {
       wrapText(ctx, e.title, x + 8, y + 18, COL_WIDTH - 16, 11);
     });
 
-    // all-day events: full-column highlight, layered on top so it's
-    // unmistakable regardless of what else is scheduled that day
+    // all-day events: a light wash with top/bottom accent lines only (no
+    // per-day box) so a multi-day event like "Adjustment Period" reads as
+    // one continuous band across the week instead of separate boxed tiles,
+    // and stays faint enough that classes underneath are still legible.
     allDayEvents.forEach((e, idx) => {
       const border = e.color || COLORS.event;
-      ctx.fillStyle = hexToRgba(border, 0.22);
+      ctx.fillStyle = hexToRgba(border, 0.09);
       ctx.fillRect(x, bodyTop, COL_WIDTH, colHeight);
-      ctx.strokeStyle = border;
-      ctx.lineWidth = 1;
-      ctx.strokeRect(x + 0.5, bodyTop + 0.5, COL_WIDTH - 1, colHeight - 1);
+      ctx.strokeStyle = hexToRgba(border, 0.55);
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(x, bodyTop + 0.5);
+      ctx.lineTo(x + COL_WIDTH, bodyTop + 0.5);
+      ctx.moveTo(x, bodyTop + colHeight - 0.5);
+      ctx.lineTo(x + COL_WIDTH, bodyTop + colHeight - 0.5);
+      ctx.stroke();
       ctx.fillStyle = border;
       ctx.font = `10.5px ${FONT_BOLD}`;
       ctx.textAlign = 'center';
