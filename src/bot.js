@@ -6,7 +6,15 @@ import { now, dateFromKey } from './dates.js';
 
 const commands = [
   new SlashCommandBuilder().setName('schedule').setDescription("Show this week's schedule right now"),
-  new SlashCommandBuilder().setName('publish').setDescription('Force-repost the schedule to the announcement channel'),
+  new SlashCommandBuilder()
+    .setName('publish')
+    .setDescription('Force-repost the schedule to the announcement channel')
+    .addStringOption((opt) =>
+      opt
+        .setName('week')
+        .setDescription('Which week to post (defaults to current)')
+        .addChoices({ name: 'Current week', value: 'current' }, { name: 'Next week', value: 'next' })
+    ),
   new SlashCommandBuilder()
     .setName('calendar')
     .setDescription('Get the link to subscribe to this schedule in Google or Apple Calendar'),
@@ -66,9 +74,10 @@ export async function createBot() {
 
       if (interaction.commandName === 'publish') {
         await interaction.deferReply({ ephemeral: true });
+        const which = interaction.options.getString('week') || 'current';
         try {
-          const result = await publishSchedule({ force: true });
-          await interaction.editReply(`Posted a fresh schedule (${result.mode}).`);
+          const result = await publishSchedule({ force: true, which });
+          await interaction.editReply(`Posted a fresh schedule for ${which === 'next' ? 'next' : 'this'} week (${result.mode}).`);
         } catch (err) {
           await interaction.editReply(`Failed to publish: ${err.message}`);
         }

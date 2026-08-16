@@ -17,16 +17,16 @@ export function attachClient(client) {
  * Pings SCHEDULE_ROLE_ID (if configured) with a link to the message on
  * every call, since any call to this function represents "an update".
  */
-export async function publishSchedule({ force = false } = {}) {
+export async function publishSchedule({ force = false, which = 'current' } = {}) {
   if (!clientRef) throw new Error('Discord client not attached yet');
   const channel = await clientRef.channels.fetch(config.channelId);
   if (!channel) throw new Error(`Channel ${config.channelId} not found`);
 
   const today = now();
-  const payload = await buildWeekPayload(today, 'current');
+  const payload = await buildWeekPayload(today, which);
 
   const state = await getState();
-  const wKey = weekKeyFor(today);
+  const wKey = weekKeyFor(which === 'next' ? today.add(7, 'day') : today);
 
   let resultMsg;
   let mode;
